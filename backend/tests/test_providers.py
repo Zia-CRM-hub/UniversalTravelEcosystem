@@ -142,7 +142,7 @@ async def test_duffel_book_and_cancel_payloads():
 
     p = duffel(handler)
     raw = {"offer_id": "off_1", "passenger_ids": ["pas_1"], "total_amount": "123.45", "total_currency": "GBP"}
-    res = await p.book({}, raw, PAX, CONTACT, "WN1")
+    res = await p.book({}, raw, PAX, CONTACT, "UT1")
     assert (res.provider_order_id, res.reference) == ("ord_1", "ABC123")
     body = log[0][2]["data"]
     assert body["selected_offers"] == ["off_1"]
@@ -152,7 +152,7 @@ async def test_duffel_book_and_cancel_payloads():
     assert [(m, path) for m, path, _ in log[1:]] == [
         ("POST", "/air/order_cancellations"), ("POST", "/air/order_cancellations/ore_1/actions/confirm")]
     with pytest.raises(ProviderError):
-        await p.book({}, {**raw, "passenger_ids": ["a", "b"]}, PAX, CONTACT, "WN1")  # count mismatch
+        await p.book({}, {**raw, "passenger_ids": ["a", "b"]}, PAX, CONTACT, "UT1")  # count mismatch
 
 
 # ---- Amadeus ----------------------------------------------------------------
@@ -211,14 +211,14 @@ async def test_amadeus_book_reprices_and_detects_change():
     p = amadeus(handler)
     offer = {"price": 500000, "currency": "INR"}
     raw = {"flight_offer": AM_OFFER}
-    res = await p.book(offer, raw, PAX, CONTACT, "WN1")
+    res = await p.book(offer, raw, PAX, CONTACT, "UT1")
     assert (res.provider_order_id, res.reference) == ("eJz", "XYZ789")
     t = orders[0]["data"]["travelers"][0]
     assert t["name"] == {"firstName": "ASHA", "lastName": "RAO"} and t["gender"] == "FEMALE"
     assert t["contact"]["phones"][0] == {"deviceType": "MOBILE", "countryCallingCode": "91", "number": "9876543210"}
     state["price"] = "5100.00"
     with pytest.raises(PriceChanged):
-        await p.book(offer, raw, PAX, CONTACT, "WN2")
+        await p.book(offer, raw, PAX, CONTACT, "UT2")
     assert len(orders) == 1  # no order is placed after a price change
     await p.cancel("eJz")
 

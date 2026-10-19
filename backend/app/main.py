@@ -20,7 +20,7 @@ from .services.agent import LLMClient
 from .services.payments import build_gateway
 from .services.whatsapp import WhatsAppClient
 
-log = logging.getLogger("wanderly")
+log = logging.getLogger("ute")
 _EXEMPT = ("/health", "/metrics")
 
 
@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Wanderly API", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="Universal Travel Ecosystem API", version="0.2.0", lifespan=lifespan)
 
     if settings.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in settings.cors_origins.split(",")],

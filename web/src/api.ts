@@ -1,5 +1,5 @@
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
-const TOKEN_KEY = "wanderly_token";
+const TOKEN_KEY = "ute_token";
 
 export type Mode = "flight" | "train" | "bus";
 
@@ -105,7 +105,7 @@ async function call<T>(path: string, init: RequestInit & { headers?: Record<stri
   if (!res.ok) {
     if (res.status === 401 && token) {
       setToken(null);
-      window.dispatchEvent(new Event("wanderly:logout"));
+      window.dispatchEvent(new Event("ute:logout"));
     }
     throw new ApiError(typeof body.detail === "string" ? body.detail : "Something went wrong.", res.status, body.code ?? "error");
   }

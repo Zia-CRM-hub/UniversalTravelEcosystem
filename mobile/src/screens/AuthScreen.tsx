@@ -28,7 +28,7 @@ export default function AuthScreen({ onDone }: { onDone: () => void }) {
   return (
     <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView contentContainerStyle={[s.pad, { paddingTop: 80 }]} keyboardShouldPersistTaps="handled">
-        <Text style={[s.h1, { fontSize: 32 }]}>Wanderly</Text>
+        <Text style={[s.h1, { fontSize: 26 }]}>Universal Travel Ecosystem</Text>
         <Text style={[s.mute, { marginBottom: 24 }]}>Flights, trains, buses and stays. One simple trip.</Text>
         {register && <Field label="Name" value={name} onChangeText={setName} autoCapitalize="words" />}
         <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />

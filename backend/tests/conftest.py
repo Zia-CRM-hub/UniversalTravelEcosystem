@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 # Must be set before `app` is imported.
-_DB = Path(tempfile.gettempdir()) / "wanderly_test.db"
+_DB = Path(tempfile.gettempdir()) / "ute_test.db"
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_DB.as_posix()}"
 os.environ["PROVIDERS"] = "demo"
 os.environ["APP_ENV"] = "dev"

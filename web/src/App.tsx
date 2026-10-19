@@ -19,15 +19,15 @@ export default function App() {
   const [authed, setAuthed] = useState(!!getToken());
   useEffect(() => {
     const out = () => setAuthed(false);
-    window.addEventListener("wanderly:logout", out);
-    return () => window.removeEventListener("wanderly:logout", out);
+    window.addEventListener("ute:logout", out);
+    return () => window.removeEventListener("ute:logout", out);
   }, []);
 
   return (
     <>
       <header className="nav">
         <Link to="/" className="brand">
-          Wanderly
+          Universal Travel Ecosystem
         </Link>
         <nav>
           <NavLink to="/">Search</NavLink>

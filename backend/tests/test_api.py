@@ -59,7 +59,7 @@ def test_checkout_flow_replay_and_ownership(client):
     out = r.json()
     assert out["status"] == "booked" and len(out["bookings"]) == 1
     b = out["bookings"][0]
-    assert b["status"] == "confirmed" and b["total_price"] == o["price"] and b["reference"].startswith("WN")
+    assert b["status"] == "confirmed" and b["total_price"] == o["price"] and b["reference"].startswith("UT")
     assert "born_on" not in b["passengers"][0]  # PII not echoed back
 
     replay = confirm(client, h, body["id"])  # e.g. client retry after a dropped connection

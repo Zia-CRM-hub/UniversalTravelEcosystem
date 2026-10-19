@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Wanderly",
-    "slug": "wanderly",
+    "name": "Universal Travel Ecosystem",
+    "slug": "universal-travel-ecosystem",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "ios": { "bundleIdentifier": "org.example.wanderly" },
-    "android": { "package": "org.example.wanderly" },
+    "ios": { "bundleIdentifier": "org.example.universaltravel" },
+    "android": { "package": "org.example.universaltravel" },
     "extra": { "apiUrl": "http://10.0.2.2:8000" }
   }
 }

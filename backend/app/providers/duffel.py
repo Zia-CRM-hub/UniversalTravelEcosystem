@@ -111,7 +111,7 @@ class DuffelProvider(TravelProvider):
                  "email": contact["email"], "phone_number": contact["phone"]}
                 for pid, p in zip(ids, passengers, strict=False)
             ],
-            "metadata": {"wanderly_ref": reference},
+            "metadata": {"ute_ref": reference},
         }}
         res = await self.http.request("POST", "/air/orders", json=body, retry=False)
         d = res["data"]

@@ -127,7 +127,7 @@ async def confirm_checkout(db: AsyncSession, providers: dict[str, TravelProvider
     contact = body.contact.model_dump(mode="json")
     confirmed: list[Booking] = []
     for snap in snaps:
-        b = Booking(reference="WN" + secrets.token_hex(4).upper(), user_id=user.id, checkout_id=c.id, offer_id=snap.id,
+        b = Booking(reference="UT" + secrets.token_hex(4).upper(), user_id=user.id, checkout_id=c.id, offer_id=snap.id,
                     kind=snap.kind, provider=snap.provider, total_price=snap.price, currency=snap.currency,
                     offer=snap.offer, passengers=passengers, contact=contact)
         db.add(b)

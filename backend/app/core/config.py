@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_env: Literal["dev", "prod"] = "dev"
-    database_url: str = "sqlite+aiosqlite:///./wanderly.db"
+    database_url: str = "sqlite+aiosqlite:///./ute.db"
     # Dev/test convenience; production schema is managed by `alembic upgrade head`.
     auto_create_tables: bool | None = None
     secret_key: SecretStr = SecretStr(_DEV_SECRET)
@@ -40,7 +40,7 @@ class Settings(BaseSettings):
 
     # --- places -------------------------------------------------------------
     nominatim_url: str = "https://nominatim.openstreetmap.org"
-    user_agent: str = "wanderly-travel/0.1 (self-hosted)"
+    user_agent: str = "universal-travel-ecosystem/0.1 (self-hosted)"
 
     # --- payments -----------------------------------------------------------
     payment_gateway: Literal["demo", "razorpay"] = "demo"

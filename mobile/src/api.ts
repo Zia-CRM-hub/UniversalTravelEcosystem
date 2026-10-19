@@ -2,7 +2,7 @@ import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 
 const BASE: string = (Constants.expoConfig?.extra as { apiUrl: string }).apiUrl;
-const TOKEN_KEY = "wanderly_token";
+const TOKEN_KEY = "ute_token";
 
 export type Mode = "flight" | "train" | "bus";
 

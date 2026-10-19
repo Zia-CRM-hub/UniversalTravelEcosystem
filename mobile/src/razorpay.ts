@@ -25,7 +25,7 @@ export async function payWithRazorpay(co: Checkout, prefill: { email: string; co
       order_id: co.gateway_order_id,
       amount: co.amount,
       currency: co.currency,
-      name: "Wanderly",
+      name: "Universal Travel Ecosystem",
       prefill,
     });
     return { payment_id: r.razorpay_payment_id, signature: r.razorpay_signature };

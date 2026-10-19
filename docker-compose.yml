@@ -3,12 +3,12 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: wanderly
+      POSTGRES_USER: ute
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-      POSTGRES_DB: wanderly
+      POSTGRES_DB: ute
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U wanderly"]
+      test: ["CMD-SHELL", "pg_isready -U ute"]
       interval: 5s
       retries: 10
 
@@ -17,7 +17,7 @@ services:
     env_file: .env
     environment:
       APP_ENV: prod
-      DATABASE_URL: postgresql+psycopg://wanderly:${DB_PASSWORD}@db:5432/wanderly
+      DATABASE_URL: postgresql+psycopg://ute:${DB_PASSWORD}@db:5432/ute
     depends_on:
       db: { condition: service_healthy }
     restart: unless-stopped
