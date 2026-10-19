@@ -1,0 +1,18 @@
+# Replace :80 with your domain (e.g. travel.example.com) for automatic HTTPS.
+:80 {
+	encode gzip
+	handle /metrics {
+		respond 404
+	}
+	handle /v1/* {
+		reverse_proxy api:8000
+	}
+	handle /health/* {
+		reverse_proxy api:8000
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

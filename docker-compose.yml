@@ -1,0 +1,44 @@
+# docker compose up -d --build   ->  site + API on :80 (Caddy), API docs at /v1 via the API container
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: wanderly
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: wanderly
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wanderly"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    env_file: .env
+    environment:
+      APP_ENV: prod
+      DATABASE_URL: postgresql+psycopg://wanderly:${DB_PASSWORD}@db:5432/wanderly
+    depends_on:
+      db: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Web app + reverse proxy (automatic HTTPS once a real domain is in web/Caddyfile).
+  edge:
+    build: ./web
+    ports: ["80:80", "443:443"]
+    volumes: [caddy_data:/data]
+    depends_on: [api]
+    restart: unless-stopped
+
+  # Optional open-source LLM for the chat agent / WhatsApp bot:
+  #   docker compose --profile llm up -d, then `docker compose exec ollama ollama pull llama3.1`
+  #   and set LLM_BASE_URL=http://ollama:11434/v1 in .env
+  ollama:
+    image: ollama/ollama
+    profiles: ["llm"]
+    volumes: [ollama:/root/.ollama]
+
+volumes:
+  pgdata:
+  caddy_data:
+  ollama:

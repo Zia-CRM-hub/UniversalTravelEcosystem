@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Wanderly",
+    "slug": "wanderly",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": { "bundleIdentifier": "org.example.wanderly" },
+    "android": { "package": "org.example.wanderly" },
+    "extra": { "apiUrl": "http://10.0.2.2:8000" }
+  }
+}
