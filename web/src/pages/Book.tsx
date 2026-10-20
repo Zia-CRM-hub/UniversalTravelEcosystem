@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { api, ApiError, Booking, Checkout, Contact, money, Offer, Passenger, RazorpayResult, remember } from "../api";
 import OfferCard from "../components/OfferCard";
 import { payWithRazorpay } from "../razorpay";
@@ -7,7 +7,9 @@ import { payWithRazorpay } from "../razorpay";
 const blank = (): Passenger => ({ title: "mr", gender: "m", given_name: "", family_name: "", born_on: "" });
 
 /** Books one or more offers (a single result, or a whole planned trip) for the same travellers, with ONE payment. */
-export default function BookPage() {
+export default function BookPage({ authed, onAuthed }: { authed: boolean; onAuthed: () => void }) {
+  const loc = useLocation();
+  const [password, setPassword] = useState("");
   const ids = (useSearchParams()[0].get("offers") ?? "").split(",").filter(Boolean);
   const [offers, setOffers] = useState<Offer[] | null>(null);
   const [pax, setPax] = useState<Passenger[]>([]);
@@ -38,6 +40,11 @@ export default function BookPage() {
     remember("travellers", pax);
     remember("contact", contact);
     try {
+      if (!authed) {
+        // Guests book on this one page: the account is created as part of paying.
+        await api.register(contact.email.trim(), `${pax[0].given_name} ${pax[0].family_name}`.trim(), password);
+        onAuthed();
+      }
       const co = (checkout.current ??= await api.checkout(ids));
       if (co.gateway === "razorpay" && !paid.current) {
         paid.current = await payWithRazorpay(co, { email: contact.email, contact: contact.phone });
@@ -48,7 +55,7 @@ export default function BookPage() {
       if (e instanceof ApiError) {
         checkout.current = null;
         paid.current = null;
-        setErr(e.message + (e.status === 402 || e.code === "checkout_failed" ? "" : " If you paid, the hold is released automatically and nothing is charged."));
+        setErr(e.message + (e.status === 402 || e.code === "checkout_failed" || e.code === "email_taken" || e.code === "signup_disabled" ? "" : " If you paid, the hold is released automatically and nothing is charged."));
       } else {
         setErr((e as Error).message || "Network problem. Press the button again to retry safely.");
       }
@@ -99,7 +106,17 @@ export default function BookPage() {
         <label className="field"><span>Email</span><input type="email" required value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} /></label>
         <label className="field"><span>Mobile (with country code)</span><input required pattern="\+[1-9][0-9]{6,14}" placeholder="+919876543210" value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} /></label>
       </div>
-      {err && <p className="err" role="alert">{err}</p>}
+      {!authed && (
+        <>
+          <h2>Save your trip</h2>
+          <label className="field">
+            <span>Create a password (8+ characters) to manage this booking later</span>
+            <input type="password" minLength={8} required autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </label>
+          <p className="mute">Already have an account? <Link to="/login" state={{ next: loc.pathname + loc.search }}>Log in</Link></p>
+        </>
+      )}
+      {err && <p className="err" role="alert">{err}{err.includes("already registered") && <> <Link to="/login" state={{ next: loc.pathname + loc.search }}>Log in instead</Link></>}</p>}
       <button className="btn" disabled={busy}>{busy ? "Processing…" : `Pay ${money(total, offers[0].currency)}`}</button>
       <p className="mute">You are charged only after every booking is confirmed.</p>
     </form>

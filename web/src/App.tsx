@@ -51,7 +51,7 @@ export default function App() {
           <Route path="/results" element={<ResultsPage />} />
           <Route path="/plan" element={<PlanPage />} />
           <Route path="/assistant" element={<RequireAuth authed={authed}><ChatPage /></RequireAuth>} />
-          <Route path="/book" element={<RequireAuth authed={authed}><BookPage /></RequireAuth>} />
+          <Route path="/book" element={<BookPage authed={authed} onAuthed={() => setAuthed(true)} />} />
           <Route path="/trips" element={<RequireAuth authed={authed}><TripsPage /></RequireAuth>} />
           <Route path="/login" element={<LoginPage onDone={() => setAuthed(true)} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
