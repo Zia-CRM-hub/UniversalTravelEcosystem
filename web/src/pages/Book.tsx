@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api, ApiError, Booking, Checkout, Contact, money, Offer, Passenger, RazorpayResult } from "../api";
+import { api, ApiError, Booking, Checkout, Contact, money, Offer, Passenger, RazorpayResult, remember } from "../api";
 import OfferCard from "../components/OfferCard";
 import { payWithRazorpay } from "../razorpay";
 
@@ -11,7 +11,7 @@ export default function BookPage() {
   const ids = (useSearchParams()[0].get("offers") ?? "").split(",").filter(Boolean);
   const [offers, setOffers] = useState<Offer[] | null>(null);
   const [pax, setPax] = useState<Passenger[]>([]);
-  const [contact, setContact] = useState<Contact>({ email: "", phone: "" });
+  const [contact, setContact] = useState<Contact>(() => remember<Contact>("contact") ?? { email: remember<string>("email") ?? "", phone: "" });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<Booking[]>([]);
@@ -23,7 +23,8 @@ export default function BookPage() {
   useEffect(() => {
     Promise.all(ids.map(api.offer)).then((o) => {
       setOffers(o);
-      setPax(Array.from({ length: o[0]?.pax ?? 1 }, blank));
+      const saved = remember<Passenger[]>("travellers") ?? [];
+      setPax(Array.from({ length: o[0]?.pax ?? 1 }, (_, i) => saved[i] ?? blank()));
     }).catch((e) => setErr(e.message));
   }, []);
 
@@ -34,6 +35,8 @@ export default function BookPage() {
     if (!offers) return;
     setErr("");
     setBusy(true);
+    remember("travellers", pax);
+    remember("contact", contact);
     try {
       const co = (checkout.current ??= await api.checkout(ids));
       if (co.gateway === "razorpay" && !paid.current) {

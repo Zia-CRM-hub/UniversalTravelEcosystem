@@ -134,9 +134,11 @@ export const api = {
   tenantConfig: () => call<TenantConfig>("/v1/tenant/config"),
   async register(email: string, name: string, password: string) {
     setToken((await call<{ access_token: string }>("/v1/auth/register", json({ email, name, password }))).access_token);
+    remember("email", email);
   },
   async login(email: string, password: string) {
     setToken((await call<{ access_token: string }>("/v1/auth/login", json({ email, password }))).access_token);
+    remember("email", email);
   },
   places: (q: string) => call<{ name: string }[]>(`/v1/places?${qs({ q })}`),
   transport: (kind: Mode, origin: string, destination: string, date: string, adults: number) =>
@@ -157,6 +159,16 @@ export const api = {
   chat: (message: string) => call<{ reply: string; cards: Card[] }>("/v1/agent/chat", json({ message })),
   resetChat: () => call<void>("/v1/agent/session", { method: "DELETE" }),
 };
+
+// ---- remembered details (this browser only) so repeat tasks need fewer clicks ----
+export function remember<T>(key: string, value?: T): T | null {
+  try {
+    if (value !== undefined) localStorage.setItem(`ute_${key}`, JSON.stringify(value));
+    return JSON.parse(localStorage.getItem(`ute_${key}`) ?? "null") as T | null;
+  } catch {
+    return null;
+  }
+}
 
 // ---- formatting -----------------------------------------------------------
 export const money = (minor: number, cur: string) => {

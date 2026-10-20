@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, Mode, Offer, Warning } from "../api";
 import OfferCard from "../components/OfferCard";
 
 export default function ResultsPage() {
   const [sp] = useSearchParams();
+  const nav = useNavigate();
   const [offers, setOffers] = useState<Offer[] | null>(null);
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [err, setErr] = useState("");
@@ -28,8 +29,11 @@ export default function ResultsPage() {
         <p className="mute">Some suppliers didn’t respond ({warnings.map((w) => w.provider).join(", ")}), so results may be incomplete.</p>
       )}
       {offers.length === 0 && <p className="mute">No results. Try other dates or places.</p>}
-      {offers.map((o) => (
-        <OfferCard key={o.offer_id} o={o} action={<Link className="btn small" to={`/book?offers=${o.offer_id}`}>Select</Link>} />
+      {offers.map((o, i) => (
+        <div key={o.offer_id} className="pick" onClick={() => nav(`/book?offers=${o.offer_id}`)}>
+          {i === 0 && offers.length > 1 && <span className="badge">Cheapest</span>}
+          <OfferCard o={o} action={<Link className="btn small" to={`/book?offers=${o.offer_id}`} onClick={(e) => e.stopPropagation()}>Book this</Link>} />
+        </div>
       ))}
     </section>
   );

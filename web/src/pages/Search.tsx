@@ -1,7 +1,7 @@
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PlaceInput from "../components/PlaceInput";
-import { todayPlus } from "../api";
+import { todayPlus, remember } from "../api";
 
 const MODES = [
   ["flight", "Flights"],
@@ -12,9 +12,10 @@ const MODES = [
 
 export default function SearchPage() {
   const nav = useNavigate();
-  const [mode, setMode] = useState<(typeof MODES)[number][0]>("flight");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const last = remember<{ mode: (typeof MODES)[number][0]; from: string; to: string }>("last_search");
+  const [mode, setMode] = useState<(typeof MODES)[number][0]>(last?.mode ?? "flight");
+  const [from, setFrom] = useState(last?.from ?? "");
+  const [to, setTo] = useState(last?.to ?? "");
   const [date, setDate] = useState(todayPlus(7));
   const [out, setOut] = useState(todayPlus(9));
   const [people, setPeople] = useState(1);
@@ -22,7 +23,8 @@ export default function SearchPage() {
 
   function go(e: FormEvent) {
     e.preventDefault();
-    const q = hotel
+    remember("last_search", { mode, from, to });
+    const q: Record<string, string> = hotel
       ? { type: "hotel", city: to, check_in: date, check_out: out, guests: String(people) }
       : { type: "transport", kind: mode, origin: from, destination: to, date, adults: String(people) };
     nav(`/results?${new URLSearchParams(q)}`);
@@ -39,8 +41,11 @@ export default function SearchPage() {
         ))}
       </div>
       <div className="grid">
-        {!hotel && <PlaceInput label="From" value={from} onChange={setFrom} placeholder="Delhi" />}
-        <PlaceInput label={hotel ? "City" : "To"} value={to} onChange={setTo} placeholder="Goa" />
+        {!hotel && <PlaceInput label="From" value={from} onChange={setFrom} placeholder="Delhi" required />}
+        {!hotel && (
+          <button type="button" className="chip swap" aria-label="Swap From and To" onClick={() => { setFrom(to); setTo(from); }}>⇄</button>
+        )}
+        <PlaceInput label={hotel ? "City" : "To"} value={to} onChange={setTo} placeholder="Goa" required />
         <label className="field">
           <span>{hotel ? "Check-in" : "Date"}</span>
           <input type="date" min={todayPlus(0)} value={date} required onChange={(e) => { setDate(e.target.value); if (out <= e.target.value) setOut(e.target.value); }} />

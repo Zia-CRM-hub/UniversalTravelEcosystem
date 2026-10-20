@@ -33,3 +33,7 @@ fieldset { border: 1px solid var(--line); border-radius: 12px; margin: 0 0 12px;
 .bubble.me { align-self: flex-end; background: var(--brand); color: #fff; }
 .composer { display: flex; gap: 8px; margin-top: 10px; } .composer input { flex: 1; }
 @media (max-width: 600px) { main { padding: 8px; } .panel { padding: 14px; border-radius: 12px; } }
+
+.pick { position: relative; cursor: pointer; } .pick:hover .card { border-color: var(--brand); box-shadow: 0 2px 10px rgba(11,110,253,.12); }
+.badge { position: absolute; top: -2px; right: 12px; z-index: 1; background: var(--ok); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 10px; border-radius: 10px; }
+.swap { align-self: end; justify-self: start; margin-bottom: 8px; font-size: 18px; }
