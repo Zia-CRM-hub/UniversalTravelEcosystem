@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Universal Travel Ecosystem — Project Presentation</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#131c30; --panel2:#1a2640; --line:#26345a;
+    --text:#e8edf7; --muted:#9aa9c7; --accent:#4f8cff; --accent2:#22d3b6;
+    --warn:#f5b84b; --bad:#f2677a; --good:#3ddc97;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--text);
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
+  .deck{position:relative;width:100vw;height:100vh}
+  .slide{position:absolute;inset:0;padding:6vh 7vw 9vh;display:flex;flex-direction:column;justify-content:center;
+    opacity:0;pointer-events:none;transform:translateX(30px);transition:opacity .45s ease,transform .45s ease;
+    background:radial-gradient(1200px 600px at 85% -10%,rgba(79,140,255,.16),transparent 60%),
+               radial-gradient(900px 500px at -10% 110%,rgba(34,211,182,.10),transparent 60%),var(--bg)}
+  .slide.active{opacity:1;pointer-events:auto;transform:none}
+  .slide.past{transform:translateX(-30px)}
+  .eyebrow{color:var(--accent2);font-size:clamp(12px,1.1vw,16px);letter-spacing:.18em;text-transform:uppercase;font-weight:600;margin-bottom:1.2vh}
+  h1{font-size:clamp(34px,5.2vw,76px);line-height:1.05;font-weight:800;letter-spacing:-.02em}
+  h2{font-size:clamp(26px,3.3vw,48px);line-height:1.1;font-weight:750;letter-spacing:-.01em;margin-bottom:3vh}
+  h3{font-size:clamp(15px,1.5vw,22px);margin-bottom:.8vh}
+  p,li{font-size:clamp(14px,1.45vw,21px);line-height:1.5;color:var(--muted)}
+  .grad{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lead{font-size:clamp(16px,1.9vw,28px);color:var(--muted);max-width:60ch;margin-top:2.5vh}
+  .grid{display:grid;gap:1.6vw}
+  .g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+  .card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:14px;padding:2vh 1.4vw}
+  .card p,.card li{font-size:clamp(12px,1.15vw,17px)}
+  .icon{font-size:clamp(24px,2.6vw,40px);margin-bottom:.8vh}
+  ul{list-style:none} li{padding-left:1.1em;position:relative;margin:.55vh 0}
+  li::before{content:"";position:absolute;left:0;top:.62em;width:.45em;height:.45em;border-radius:50%;background:var(--accent)}
+  .tag{display:inline-block;padding:.25em .7em;border-radius:99px;font-size:clamp(10px,.95vw,14px);font-weight:700;letter-spacing:.04em}
+  .t-good{background:rgba(61,220,151,.15);color:var(--good)} .t-warn{background:rgba(245,184,75,.15);color:var(--warn)}
+  .t-bad{background:rgba(242,103,122,.15);color:var(--bad)}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:1.05vh .9vw;border-bottom:1px solid var(--line);font-size:clamp(12px,1.15vw,17px);color:var(--muted);vertical-align:top}
+  th{color:var(--text);font-weight:700;font-size:clamp(11px,1vw,15px);letter-spacing:.06em;text-transform:uppercase}
+  td:first-child{color:var(--text);font-weight:600;white-space:nowrap}
+  .stat{font-size:clamp(34px,5vw,72px);font-weight:800}
+  .flow{display:flex;align-items:stretch;gap:.8vw;flex-wrap:nowrap}
+  .step{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1.6vh .9vw;text-align:center}
+  .step b{display:block;color:var(--text);font-size:clamp(12px,1.2vw,18px);margin-bottom:.5vh}
+  .step span{font-size:clamp(11px,1vw,15px);color:var(--muted)}
+  .arrow{align-self:center;color:var(--accent);font-size:clamp(16px,2vw,28px)}
+  .step.hl{border-color:var(--accent2);box-shadow:0 0 0 1px var(--accent2) inset}
+  .tiers{display:flex;flex-direction:column;gap:1.2vh;align-items:center}
+  .tier{width:100%;max-width:640px;text-align:center;padding:1.6vh 1vw;border-radius:12px;border:1px solid var(--line);background:var(--panel)}
+  .tier b{color:var(--text);font-size:clamp(14px,1.5vw,22px)} .tier span{display:block;font-size:clamp(11px,1.05vw,16px);color:var(--muted)}
+  .down{color:var(--accent);font-size:clamp(14px,1.6vw,22px)}
+  pre{background:#0a0f1c;border:1px solid var(--line);border-radius:12px;padding:2vh 1.4vw;font-size:clamp(11px,1.1vw,16px);color:#bcd0f5;line-height:1.55;overflow:hidden}
+  .foot{position:fixed;left:0;right:0;bottom:0;height:6vh;display:flex;align-items:center;justify-content:space-between;
+    padding:0 7vw;color:var(--muted);font-size:clamp(10px,.95vw,14px);z-index:5}
+  .bar{position:fixed;left:0;top:0;height:4px;background:linear-gradient(90deg,var(--accent),var(--accent2));z-index:6;transition:width .4s}
+  .nav button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:.4em .9em;cursor:pointer;margin-left:.4em;font-size:inherit}
+  .nav button:hover{border-color:var(--accent)}
+  @media print{
+    html,body{overflow:visible;height:auto} .deck{height:auto}
+    .slide{position:relative;opacity:1;transform:none;height:100vh;page-break-after:always;pointer-events:auto}
+    .foot,.bar{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<div class="deck" id="deck">
+
+<!-- 1 Title -->
+<section class="slide">
+  <div class="eyebrow">Project overview</div>
+  <h1>Universal Travel<br><span class="grad">Ecosystem</span></h1>
+  <p class="lead">One open-source backend. Four front doors. Plan and book travel from the web, a mobile app, an AI concierge and WhatsApp — as a multi-tenant SaaS.</p>
+</section>
+
+<!-- 2 Vision -->
+<section class="slide">
+  <div class="eyebrow">The idea</div>
+  <h2>One platform for every kind of trip</h2>
+  <div class="grid g3">
+    <div class="card"><div class="icon">🌐</div><h3>Meet travellers anywhere</h3><p>Web, mobile, chat and WhatsApp all call the same API — no business rules live in the clients.</p></div>
+    <div class="card"><div class="icon">🧩</div><h3>Pluggable inventory</h3><p>Flights, trains, buses and hotels sit behind a single supplier interface. New inventory means implementing one class.</p></div>
+    <div class="card"><div class="icon">🏢</div><h3>Built as SaaS</h3><p>Platform → tenant → organization → user, with isolation, travel policy, audit and instant suspension.</p></div>
+  </div>
+</section>
+
+<!-- 3 Four doors -->
+<section class="slide">
+  <div class="eyebrow">Channels</div>
+  <h2>The four front doors</h2>
+  <div class="grid g4">
+    <div class="card"><div class="icon">💻</div><h3>Web app</h3><p>React, Vite, TypeScript. Search, plan, check out, manage trips.</p></div>
+    <div class="card"><div class="icon">📱</div><h3>Mobile app</h3><p>React Native + Expo for Android and iOS, same screens and flows.</p></div>
+    <div class="card"><div class="icon">🤖</div><h3>AI concierge</h3><p>Tool-calling agent on any OpenAI-compatible model (Ollama, vLLM, llama.cpp).</p></div>
+    <div class="card"><div class="icon">💬</div><h3>WhatsApp</h3><p>Meta Cloud API webhook with signature check, de-duplication and rate caps.</p></div>
+  </div>
+</section>
+
+<!-- 4 Architecture -->
+<section class="slide">
+  <div class="eyebrow">Architecture</div>
+  <h2>Thin API, rich services, swappable providers</h2>
+  <div class="tiers">
+    <div class="tier"><b>Clients</b><span>Web · Mobile · WhatsApp</span></div><div class="down">▼</div>
+    <div class="tier"><b>Caddy</b><span>Automatic HTTPS · static web hosting</span></div><div class="down">▼</div>
+    <div class="tier"><b>FastAPI  /v1/*</b><span>Thin routers → services: search · planner · checkout · agent · whatsapp · payments</span></div><div class="down">▼</div>
+    <div class="grid g3" style="width:100%;max-width:900px;gap:1vw">
+      <div class="tier"><b>Providers</b><span>Duffel · Amadeus · Demo</span></div>
+      <div class="tier"><b>Payments</b><span>Razorpay · Demo gateway</span></div>
+      <div class="tier"><b>PostgreSQL</b><span>Async SQLAlchemy · Alembic</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 Stack -->
+<section class="slide">
+  <div class="eyebrow">Technology</div>
+  <h2>Tech stack</h2>
+  <table>
+    <tr><th>Layer</th><th>Choice</th></tr>
+    <tr><td>Backend</td><td>Python, FastAPI, async SQLAlchemy, Alembic migrations</td></tr>
+    <tr><td>Data</td><td>PostgreSQL (SQLite for local demo); money as integer minor units with ISO 4217 exponents</td></tr>
+    <tr><td>Clients</td><td>React + Vite (web), React Native + Expo (mobile), TypeScript throughout</td></tr>
+    <tr><td>AI</td><td>Any OpenAI-compatible server via <code>LLM_BASE_URL</code></td></tr>
+    <tr><td>Payments</td><td>Razorpay with manual capture, or a demo gateway</td></tr>
+    <tr><td>Places</td><td>OpenStreetMap</td></tr>
+    <tr><td>Ops</td><td>Docker Compose, Caddy, Prometheus metrics, GitHub Actions CI</td></tr>
+  </table>
+</section>
+
+<!-- 6 Checkout saga -->
+<section class="slide">
+  <div class="eyebrow">Core design</div>
+  <h2>Checkout saga: never charged for a failed trip</h2>
+  <div class="flow">
+    <div class="step"><b>1 · Create</b><span>Validate offers, sum price, open gateway order</span></div><div class="arrow">›</div>
+    <div class="step"><b>2 · Hold</b><span>Customer pays; money is held, not taken</span></div><div class="arrow">›</div>
+    <div class="step"><b>3 · Book</b><span>Write <i>pending</i>, call supplier, mark <i>confirmed</i> — per offer</span></div><div class="arrow">›</div>
+    <div class="step hl"><b>4 · Capture</b><span>Only after every supplier confirmed</span></div>
+  </div>
+  <div class="grid g2" style="margin-top:3vh">
+    <div class="card"><h3>If any booking fails</h3><ul><li>Cancel supplier orders already placed</li><li>Void the payment hold</li><li>Checkout → failed</li></ul></div>
+    <div class="card"><h3>Guarantees</h3><ul><li>Idempotent confirm — retries never double-book</li><li>No endpoint books without a checkout</li><li>Booking row exists before the supplier call</li></ul></div>
+  </div>
+</section>
+
+<!-- 7 AI -->
+<section class="slide">
+  <div class="eyebrow">AI concierge</div>
+  <h2>An agent that can’t invent a price</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Read-only by design</h3>
+      <ul><li>Tools: <code>search_transport</code>, <code>search_hotels</code>, <code>plan_trip</code></li><li>Cannot book or take payment</li><li>Hands off a Book link to the web app</li></ul></div>
+    <div class="card"><h3>Safety choices</h3>
+      <ul><li>Prices and links rendered by code, not typed by the model</li><li>Supplier text treated as data (prompt-injection aware)</li><li>History stores visible dialogue only</li></ul></div>
+  </div>
+  <p style="margin-top:3vh">WhatsApp adds HMAC webhook verification, instant 200 with background reply, message de-duplication and a 10/min per-sender cap.</p>
+</section>
+
+<!-- 8 SaaS -->
+<section class="slide">
+  <div class="eyebrow">Multi-tenant SaaS</div>
+  <h2>Platform → Tenant → Organization → User</h2>
+  <div class="grid g2">
+    <div class="card">
+      <table>
+        <tr><th>Role</th><th>Scope</th></tr>
+        <tr><td>Super admin</td><td>Whole platform; onboard tenants</td></tr>
+        <tr><td>Tenant admin</td><td>One customer tenant</td></tr>
+        <tr><td>Org admin</td><td>One organization</td></tr>
+        <tr><td>Member</td><td>Own bookings only</td></tr>
+      </table>
+    </div>
+    <div class="card"><h3>Built-in controls</h3>
+      <ul><li>Every query filtered by tenant</li><li>Tenant and user re-checked on every request</li><li>Per-tenant supplier allow-list, branding, plan limits</li><li>Org travel policy (spend limit per trip)</li><li>Append-only audit of admin actions</li><li>Out-of-scope ids return 404, not 403</li></ul></div>
+  </div>
+</section>
+
+<!-- 9 Resilience & security -->
+<section class="slide">
+  <div class="eyebrow">Reliability &amp; security</div>
+  <h2>Designed for failure</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Resilience</h3>
+      <ul><li>Concurrent supplier fan-out with per-call timeouts</li><li>Failures become warnings, not errors</li><li>Circuit breaker (5 failures, 30s retry)</li><li>Retries on GETs only; orders never auto-retried</li><li>CRITICAL logs for capture failures and stuck bookings</li></ul></div>
+    <div class="card"><h3>Security</h3>
+      <ul><li>scrypt passwords, signed JWT sessions</li><li>Clients send only <code>offer_id</code> — no price tampering</li><li>Payment signature, order, amount and status verified server-side</li><li>Supplier payloads and secrets never reach clients</li><li>Refuses to start in production with weak or demo config</li></ul></div>
+  </div>
+</section>
+
+<!-- 10 Scope today -->
+<section class="slide">
+  <div class="eyebrow">Honest status</div>
+  <h2>What exists today</h2>
+  <table>
+    <tr><th>Area</th><th>Status</th><th>Notes</th></tr>
+    <tr><td>Flights</td><td><span class="tag t-good">BUILT</span></td><td>Duffel &amp; Amadeus adapters + synthetic supplier; real suppliers unverified live</td></tr>
+    <tr><td>Hotels, trains, buses</td><td><span class="tag t-warn">SYNTHETIC</span></td><td>Demo supplier only; no real inventory yet</td></tr>
+    <tr><td>AI concierge</td><td><span class="tag t-good">BUILT v1</span></td><td>Search and plan; hands off to checkout</td></tr>
+    <tr><td>SaaS roles &amp; isolation</td><td><span class="tag t-good">BUILT</span></td><td>API-only; no admin console UI yet</td></tr>
+    <tr><td>Cruises, resorts, business travel, personalization</td><td><span class="tag t-bad">NOT BUILT</span></td><td>Need inventory, accounts and data first</td></tr>
+  </table>
+</section>
+
+<!-- 11 Verification -->
+<section class="slide">
+  <div class="eyebrow">Quality</div>
+  <h2>What is verified — and what is not</h2>
+  <div class="grid g3" style="margin-bottom:3vh">
+    <div class="card"><div class="stat grad">72</div><p>passing backend tests, lint clean</p></div>
+    <div class="card"><div class="stat grad">22</div><p>SaaS-model tests: isolation, policy, suspension, audit</p></div>
+    <div class="card"><div class="stat grad">E2E</div><p>demo script runs search → checkout → agent → WhatsApp → tenants</p></div>
+  </div>
+  <div class="card"><h3>Not yet proven</h3>
+    <ul><li>Duffel, Razorpay and WhatsApp never run against live services (mocked HTTP only)</li><li>Web and mobile apps written but not yet built or run</li><li>Never load-tested; Redis rate limiting tested against a fake only</li></ul></div>
+</section>
+
+<!-- 12 Demo -->
+<section class="slide">
+  <div class="eyebrow">Try it</div>
+  <h2>See it in 20 seconds</h2>
+<pre>cd backend
+python -m venv .venv &amp;&amp; .venv/Scripts/activate
+pip install -r requirements-dev.txt
+python ../scripts/demo.py</pre>
+  <p style="margin-top:2.5vh">Starts the real API with stand-ins for the LLM and WhatsApp, then walks through search, trip planning, one-payment multi-booking checkout, cancellation, chat agent, signed WhatsApp message, and tenant onboarding with isolation and audit. Deploy: <code>docker compose up -d --build</code>.</p>
+</section>
+
+<!-- 13 Roadmap -->
+<section class="slide">
+  <div class="eyebrow">Roadmap</div>
+  <h2>Suggested path forward</h2>
+  <div class="flow">
+    <div class="step"><b>0 · Admin console</b><span>Platform, tenant and org screens; SSO, billing, Postgres row-level security</span></div><div class="arrow">›</div>
+    <div class="step"><b>1 · Make it real</b><span>Duffel sandbox, Razorpay test mode, build apps, reconciliation job</span></div><div class="arrow">›</div>
+    <div class="step"><b>2 · Real inventory</b><span>Hotels, then trains and buses via the supplier interface</span></div><div class="arrow">›</div>
+    <div class="step"><b>3 · Broaden</b><span>Homestays, experiences, local mobility</span></div><div class="arrow">›</div>
+    <div class="step"><b>4 · Personalize</b><span>Business travel and recommendations</span></div>
+  </div>
+</section>
+
+<!-- 14 Close -->
+<section class="slide">
+  <div class="eyebrow">Summary</div>
+  <h1>A solid foundation, <span class="grad">honestly scoped</span></h1>
+  <p class="lead">Safe multi-booking checkout, a supplier abstraction, an AI concierge, four channels and a multi-tenant model — ready to be made real, one integration at a time.</p>
+  <p style="margin-top:3vh">Docs: README · docs/ARCHITECTURE.md · SAAS.md · SCALING.md · API.md · OPERATIONS.md</p>
+</section>
+
+</div>
+
+<div class="foot">
+  <span>Universal Travel Ecosystem</span>
+  <span class="nav"><span id="count"></span>
+    <button id="prev" aria-label="Previous slide">◀</button><button id="next" aria-label="Next slide">▶</button><button id="full" aria-label="Fullscreen">⛶</button>
+  </span>
+</div>
+
+<script>
+(function(){
+  var slides=[].slice.call(document.querySelectorAll('.slide')), i=0;
+  var bar=document.getElementById('bar'), count=document.getElementById('count');
+  function show(n){
+    i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach(function(s,k){s.classList.toggle('active',k===i);s.classList.toggle('past',k<i)});
+    bar.style.width=((i+1)/slides.length*100)+'%';
+    count.textContent=(i+1)+' / '+slides.length;
+    history.replaceState(null,'','#'+(i+1));
+  }
+  document.getElementById('next').onclick=function(){show(i+1)};
+  document.getElementById('prev').onclick=function(){show(i-1)};
+  document.getElementById('full').onclick=function(){
+    document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen()};
+  document.addEventListener('keydown',function(e){
+    if(['ArrowRight','PageDown',' ','Enter'].indexOf(e.key)>-1){e.preventDefault();show(i+1)}
+    else if(['ArrowLeft','PageUp','Backspace'].indexOf(e.key)>-1){e.preventDefault();show(i-1)}
+    else if(e.key==='Home')show(0); else if(e.key==='End')show(slides.length-1);
+    else if(e.key==='f')document.getElementById('full').click();
+  });
+  var x0=null;
+  document.addEventListener('touchstart',function(e){x0=e.touches[0].clientX});
+  document.addEventListener('touchend',function(e){
+    if(x0===null)return; var d=e.changedTouches[0].clientX-x0;
+    if(Math.abs(d)>50)show(i+(d<0?1:-1)); x0=null});
+  show((parseInt(location.hash.slice(1),10)||1)-1);
+})();
+</script>
+</body>
+</html>
