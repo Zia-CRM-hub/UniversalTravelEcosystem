@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import PlaceInput from "../components/PlaceInput";
 import { todayPlus, remember } from "../api";
 
@@ -62,6 +62,7 @@ export default function SearchPage() {
         </label>
       </div>
       <button className="btn">Search</button>
+      <p className="mute">Need transport and a stay? <Link to="/plan">Plan the whole trip in one go</Link>.</p>
     </form>
   );
 }

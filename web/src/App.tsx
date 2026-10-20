@@ -49,7 +49,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<SearchPage />} />
           <Route path="/results" element={<ResultsPage />} />
-          <Route path="/plan" element={<RequireAuth authed={authed}><PlanPage /></RequireAuth>} />
+          <Route path="/plan" element={<PlanPage />} />
           <Route path="/assistant" element={<RequireAuth authed={authed}><ChatPage /></RequireAuth>} />
           <Route path="/book" element={<RequireAuth authed={authed}><BookPage /></RequireAuth>} />
           <Route path="/trips" element={<RequireAuth authed={authed}><TripsPage /></RequireAuth>} />
