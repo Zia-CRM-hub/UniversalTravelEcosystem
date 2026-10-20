@@ -121,6 +121,7 @@ def main():
            "DATABASE_URL": f"sqlite+aiosqlite:///{db.as_posix()}", "PROVIDERS": "demo", "APP_ENV": "dev",
            "RATE_LIMIT_PER_MINUTE": "0", "LLM_BASE_URL": f"http://127.0.0.1:{llm_port}/v1",
            "WEB_BASE_URL": "https://travel.example.com",
+           "SUPERADMIN_EMAIL": "owner@platform-ute.com", "SUPERADMIN_PASSWORD": "super-admin-demo-pass",
            "WHATSAPP_VERIFY_TOKEN": "verify-me", "WHATSAPP_APP_SECRET": APP_SECRET, "WHATSAPP_ACCESS_TOKEN": "t",
            "WHATSAPP_PHONE_NUMBER_ID": "12345", "WHATSAPP_GRAPH_URL": f"http://127.0.0.1:{wa_port}"}
     server = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app", "--port", str(api_port)],
@@ -138,6 +139,59 @@ def main():
         run(base)
     finally:
         server.terminate()
+
+
+def saas(c, d1):
+    def login(email, pw, tenant):
+        r = c.post("/v1/auth/login", json={"email": email, "password": pw}, headers={"X-Tenant-Slug": tenant})
+        return {"Authorization": "Bearer " + r.json()["access_token"], "X-Tenant-Slug": tenant}
+
+    step(10, "SaaS: platform -> tenant -> organization -> traveller")
+    su = login("owner@platform-ute.com", "super-admin-demo-pass", "platform")
+    t = c.post("/v1/platform/tenants", headers=su, json={
+        "slug": "acme", "name": "Acme Corp", "max_users": 25, "max_orgs": 5, "admin_email": "admin@acme-corp.com",
+        "admin_name": "Acme Admin", "admin_password": "acme-admin-pass-1"}).json()
+    print(f" SUPER ADMIN created tenant '{t['slug']}' (plan: {t['max_users']} users, {t['max_orgs']} orgs) and its first admin")
+    admin = login("admin@acme-corp.com", "acme-admin-pass-1", "acme")
+    org = c.post("/v1/admin/organizations", headers=admin,
+                 json={"name": "Sales", "max_trip_amount": 100, "policy_currency": "INR"}).json()
+    print(f" TENANT ADMIN created organization 'Sales' with a travel policy: max {org['max_trip_amount']:.0f} "
+          f"{org['policy_currency']} per trip")
+    for email, role in (("lead@acme-corp.com", "org_admin"), ("rep@acme-corp.com", "member")):
+        c.post("/v1/admin/users", headers=admin, json={"email": email, "name": email.split("@")[0],
+                                                       "password": "member-pass-1", "role": role, "organization_id": org["id"]})
+    lead, rep = login("lead@acme-corp.com", "member-pass-1", "acme"), login("rep@acme-corp.com", "member-pass-1", "acme")
+    print(" Created an ORG ADMIN (lead) and a MEMBER (rep) in Sales")
+
+    offer = c.get("/v1/search/transport", headers={"X-Tenant-Slug": "acme"}, params={
+        "kind": "train", "origin": "Delhi", "destination": "Jaipur", "date": d1}).json()["offers"][0]
+    r = c.post("/v1/checkouts", headers=rep, json={"offer_ids": [offer["offer_id"]]})
+    print(f" Policy in action: rep tries to book {money(offer['price'])} -> HTTP {r.status_code}: {r.json()['detail']}")
+    c.patch(f"/v1/admin/organizations/{org['id']}", headers=admin, json={"max_trip_amount": 100000})
+    r = c.post("/v1/checkouts", headers=rep, json={"offer_ids": [offer["offer_id"]]})
+    print(f" Tenant admin raises the limit -> the same booking now opens a checkout: HTTP {r.status_code}")
+
+    seen_by_lead = len(c.get("/v1/admin/users", headers=lead).json())
+    seen_by_admin = len(c.get("/v1/admin/users", headers=admin).json())
+    print(f" Scoping: the org admin sees {seen_by_lead} users (only Sales); the tenant admin sees {seen_by_admin}")
+    print(f" A member opening /admin/users -> HTTP {c.get('/v1/admin/users', headers=rep).status_code} (forbidden)")
+
+    stranger = c.post("/v1/auth/register", json={"email": "stranger@example.com", "name": "S", "password": "password123"})
+    other = c.post("/v1/checkouts", headers={"Authorization": "Bearer " + stranger.json()["access_token"]},
+                   json={"offer_ids": [offer["offer_id"]]})
+    print(f" Isolation: a user of a DIFFERENT tenant using Acme's offer id -> HTTP {other.status_code} (looks like it doesn't exist)")
+
+    c.patch(f"/v1/platform/tenants/{t['id']}", headers=su, json={"status": "suspended"})
+    cut = c.get("/v1/auth/me", headers=rep)
+    print(f" SUPER ADMIN suspends Acme -> rep's existing session is cut off at once: HTTP {cut.status_code} {cut.json()['code']}")
+    c.patch(f"/v1/platform/tenants/{t['id']}", headers=su, json={"status": "active"})
+    print(f" Reactivated -> HTTP {c.get('/v1/auth/me', headers=rep).status_code}")
+
+    print(" Audit trail (what the tenant admin sees):")
+    for e in reversed(c.get("/v1/admin/audit", headers=admin).json()[:6]):
+        print(f"   {e['action']:<18} by {e['actor_email']}")
+    stats = c.get("/v1/platform/stats", headers=su).json()
+    print(f" Platform stats: {stats['tenants']} tenants, {stats['users']} users, bookings {stats['bookings_by_status']}")
 
 
 def run(base):
@@ -228,6 +282,7 @@ def run(base):
     reqs = [l for l in metrics.splitlines() if l.startswith("bookings_total{")]
     print(" bookings_total metric:", *reqs or ["(none)"], sep="\n   ")
     print(" Every response carries X-Request-ID, and logs are JSON, so one request can be traced end to end.")
+    saas(c, d1)
     print("\nDemo complete. The data lived in a temp database and is discarded.")
 
 

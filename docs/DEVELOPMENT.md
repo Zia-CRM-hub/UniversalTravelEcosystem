@@ -5,13 +5,15 @@
 ```
 backend/
   app/
-    api/          routers (thin): auth, search, checkouts, bookings, trips, agent, whatsapp, health
+    api/          routers (thin): auth, tenant, search, checkouts, bookings, trips, agent, whatsapp, admin, platform, health
     services/     search, planner, checkout (saga), booking (cancel), payments, agent, whatsapp
     providers/    base (interface), http (retries + breaker), demo, duffel, amadeus, registry
-    core/         config (validation), errors, money, observability
+    core/         config (validation), errors, money, observability, ratelimit (memory/Redis)
     models.py db.py security.py schemas.py main.py
+    tenancy.py    tenant resolution, role checks, per-tenant supplier scoping, audit helper, start-up bootstrap
+    worker.py     background worker (python -m app.worker)
   alembic/        migrations (0001_initial_schema.py)
-  tests/          pytest (50 tests; supplier and gateway HTTP is mocked)
+  tests/          pytest (72 tests; supplier and gateway HTTP is mocked)
 web/              React + Vite + TypeScript
 mobile/           Expo React Native + TypeScript
 scripts/demo.py   one-command demo
@@ -26,7 +28,7 @@ cd backend
 python -m venv .venv && .venv/Scripts/activate      # Linux/macOS: source .venv/bin/activate
 pip install -r requirements-dev.txt
 ruff check .          # lint
-pytest -q             # 50 tests, ~20s
+pytest -q             # 72 tests, ~1 min
 uvicorn app.main:app --reload     # http://localhost:8000/docs
 ```
 
@@ -44,6 +46,8 @@ CI ([.github/workflows/ci.yml](../.github/workflows/ci.yml)) runs ruff and pytes
 - `tests/conftest.py` sets env vars **before** importing the app, uses a temp SQLite file, and resets the schema per test. `client` is a FastAPI `TestClient`.
 - Suppliers and gateways are swapped by assigning `client.app.state.providers` / `.gateway` to fakes (see `FlakyProvider` and `RecordingGateway` in `tests/test_checkout.py`).
 - Supplier and gateway HTTP is mocked with `httpx.MockTransport` (`tests/test_providers.py`, `tests/test_checkout.py`).
+- `tests/test_tenancy.py` covers the SaaS model: super admin, tenant and org admin scopes, cross-tenant isolation, travel policy, suspension, plan limits, audit log, the worker. Helpers `make_tenant`, `add_org`, `add_user` build a tenant in a few lines.
+- `tests/test_ratelimit.py` covers the in-memory and Redis limiters (Redis via `fakeredis`).
 - `tests/test_migrations.py` applies the migrations and fails if `models.py` has drifted from them.
 - Async tests use `@pytest.mark.anyio`.
 
@@ -84,6 +88,13 @@ Implement the `PaymentGateway` protocol in `services/payments.py` (`create_order
 cd backend && alembic revision --autogenerate -m "add thing"
 # review the generated file, then run the tests (they apply it and check for drift)
 ```
+
+## Working with tenants in code
+
+- Public routes use `Depends(public_scope)`; authenticated traveller routes use `Depends(user_scope)`. Both give you `scope.tenant` and `scope.providers` (already narrowed to the tenant's allow-list). Never use the platform-wide provider dict for tenant-facing work.
+- Admin routes use `require_roles(...)`; scope queries with the caller's `tenant_id` (and `organization_id` for org admins), and return `404` for anything out of scope.
+- Anything you add that stores business data needs a `tenant_id` column and a cross-tenant test.
+- Admin actions call `audit(db, actor, action, target_type, target_id, tenant_id, **detail)` before `commit()`. Never put secrets in `detail`.
 
 ## Conventions
 

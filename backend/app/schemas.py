@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -26,6 +26,17 @@ class UserOut(BaseModel):
     id: str
     email: str
     name: str
+    role: str
+    tenant_id: str | None
+    organization_id: str | None
+    is_active: bool = True
+
+    model_config = {"from_attributes": True}
+
+
+class MeOut(UserOut):
+    tenant: dict | None = None  # {slug, name}
+    organization: dict | None = None  # {id, name}
 
 
 class _OfferBase(BaseModel):
@@ -169,3 +180,118 @@ class ChatIn(BaseModel):
 class ChatOut(BaseModel):
     reply: str
     cards: list[dict] = []
+
+
+# ---- SaaS administration -------------------------------------------------------------------
+Slug = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{1,38}$")]
+HexColor = Annotated[str, Field(pattern=r"^#[0-9a-fA-F]{6}$")]
+
+
+class BrandingIn(BaseModel):
+    display_name: str | None = Field(default=None, max_length=60)
+    primary_color: HexColor | None = None
+    logo_url: str | None = Field(default=None, max_length=300, pattern=r"^https://")
+
+
+class TenantSettingsIn(BaseModel):
+    """Only fields the caller sends are changed. `providers: null` means every platform supplier."""
+
+    providers: list[str] | None = None
+    self_signup: bool | None = None
+    branding: BrandingIn | None = None
+
+
+class TenantCreateIn(BaseModel):
+    slug: Slug
+    name: str = Field(min_length=2, max_length=80)
+    max_users: int = Field(default=50, ge=1, le=1_000_000)
+    max_orgs: int = Field(default=10, ge=1, le=100_000)
+    admin_email: EmailStr
+    admin_name: str = Field(min_length=1, max_length=100)
+    admin_password: str = Field(min_length=10, max_length=128)
+
+
+class TenantPatchIn(TenantSettingsIn):
+    name: str | None = Field(default=None, min_length=2, max_length=80)
+    status: Literal["active", "suspended"] | None = None
+    max_users: int | None = Field(default=None, ge=1, le=1_000_000)
+    max_orgs: int | None = Field(default=None, ge=1, le=100_000)
+
+
+class TenantOut(BaseModel):
+    id: str
+    slug: str
+    name: str
+    status: str
+    max_users: int
+    max_orgs: int
+    settings: dict
+    user_count: int | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class TenantConfigOut(BaseModel):
+    """Public: what a client needs to white-label itself for a tenant."""
+
+    slug: str
+    name: str
+    self_signup: bool
+    branding: dict
+
+
+class OrgIn(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    max_trip_amount: int | None = Field(default=None, gt=0, description="Major units of policy_currency")
+    policy_currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+
+
+class OrgPatchIn(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=80)
+    status: Literal["active", "suspended"] | None = None
+    max_trip_amount: int | None = Field(default=None, gt=0)
+    policy_currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+
+
+class OrgOut(BaseModel):
+    id: str
+    tenant_id: str
+    name: str
+    status: str
+    max_trip_amount: float | None  # major units
+    policy_currency: str | None
+    member_count: int | None = None
+
+
+class AdminUserIn(BaseModel):
+    email: EmailStr
+    name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
+    role: Literal["member", "org_admin", "tenant_admin"] = "member"
+    organization_id: str | None = None
+
+
+class AdminUserPatchIn(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    role: Literal["member", "org_admin", "tenant_admin"] | None = None
+    organization_id: str | None = None
+    is_active: bool | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+
+
+class AdminBookingOut(BookingOut):
+    user_id: str
+    organization_id: str | None
+
+
+class AuditOut(BaseModel):
+    id: str
+    tenant_id: str | None
+    actor_email: str | None
+    action: str
+    target_type: str
+    target_id: str | None
+    detail: dict
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

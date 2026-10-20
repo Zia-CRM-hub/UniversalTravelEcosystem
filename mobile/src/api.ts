@@ -3,6 +3,8 @@ import * as SecureStore from "expo-secure-store";
 
 const BASE: string = (Constants.expoConfig?.extra as { apiUrl: string }).apiUrl;
 const TOKEN_KEY = "ute_token";
+// White-label: which tenant this build belongs to (empty = the default consumer tenant).
+const TENANT: string = (Constants.expoConfig?.extra as { tenant?: string }).tenant ?? "";
 
 export type Mode = "flight" | "train" | "bus";
 
@@ -118,6 +120,7 @@ async function call<T>(path: string, init: RequestInit & { headers?: Record<stri
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(TENANT ? { "X-Tenant-Slug": TENANT } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init.headers,
     },

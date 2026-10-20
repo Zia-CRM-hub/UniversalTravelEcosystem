@@ -9,6 +9,7 @@ The exact, machine-readable contract is [openapi.json](openapi.json) (also serve
 - **Money:** integers in **minor units** with a `currency`. `283000` INR is 2,830.00 INR. The number of decimals depends on the currency (JPY 0, KWD 3). A `price` is always the **total for `pax` travellers**.
 - **Dates:** `YYYY-MM-DD`. Times are as returned by the supplier, in the local time of the airport or station.
 - **Errors:** every error is `{"detail": "<human message>", "code": "<stable_code>"}`. Branch on `code`, show `detail`. Validation errors use `code: "validation_error"`.
+- **Tenant:** send `X-Tenant-Slug: <slug>` on public calls (search, planner, login, sign-up) to say which tenant you belong to; omitted means the default `public` tenant. Authenticated calls use the logged-in user's own tenant and ignore the header. See [SAAS.md](SAAS.md).
 - **Request tracing:** send `X-Request-ID` (optional); every response echoes one.
 - **Rate limiting:** `429` with `Retry-After` (per client IP, default 120/min; health and metrics exempt).
 
@@ -18,9 +19,10 @@ The exact, machine-readable contract is [openapi.json](openapi.json) (also serve
 
 | | |
 |---|---|
-| `POST /v1/auth/register` | `{email, name, password (8+)}` → `201 {access_token}`. `409 email_taken`. |
-| `POST /v1/auth/login` | `{email, password}` → `{access_token}`. `401 bad_credentials`. |
-| `GET /v1/auth/me` 🔒 | → `{id, email, name}` |
+| `POST /v1/auth/register` | `{email, name, password (8+)}` → `201 {access_token}`; creates a `member` in the header's tenant. `403 signup_disabled` (invitation-only tenants), `403 plan_limit`, `409 email_taken`, `404 tenant_not_found`. |
+| `POST /v1/auth/login` | `{email, password}` → `{access_token}`. `401 bad_credentials`, `403 tenant_suspended`, `403 account_disabled`. Use header `X-Tenant-Slug: platform` for super admins. |
+| `GET /v1/auth/me` 🔒 | → `{id, email, name, role, tenant_id, organization_id, is_active, tenant: {slug,name}, organization: {id,name}}` |
+| `GET /v1/tenant/config` | Public. `{slug, name, self_signup, branding: {display_name, primary_color, logo_url}}` for white-labelling the client. |
 
 ### Search (public)
 
@@ -118,6 +120,38 @@ Booking `status`: `pending`, `confirmed`, `failed`, `cancelled`, `needs_attentio
 
 - `GET /health/live` process is up. `GET /health/ready` database reachable, plus supplier breaker states and whether the agent and WhatsApp are enabled.
 - `GET /metrics` Prometheus metrics. **Do not expose publicly** (the provided Caddyfile blocks it).
+
+### Admin API 🔒 (tenant admins and organization admins)
+
+`tenant_admin` works across their tenant; `org_admin` only within their own organization. Out-of-scope ids return `404`. Lists accept `limit` (max 500) and `offset`.
+
+| Endpoint | Who | What |
+|---|---|---|
+| `GET /v1/admin/tenant` | tenant | Tenant details, plan limits, settings |
+| `PATCH /v1/admin/tenant` | tenant | `{providers?, self_signup?, branding?}`. Only fields you send change; `providers: null` = all platform suppliers, `[]` = none. `422 unknown_provider` |
+| `GET /v1/admin/organizations` | tenant (all), org (own) | With member counts and policy |
+| `POST /v1/admin/organizations` | tenant | `{name, max_trip_amount?, policy_currency?}` (amount in **major** units). `403 plan_limit`, `409 organization_exists` |
+| `PATCH /v1/admin/organizations/{id}` | tenant | `{name?, status? (active/suspended), max_trip_amount? (null clears), policy_currency?}` |
+| `GET /v1/admin/users` | tenant (all), org (own org) | `?organization_id=` filter for tenant admins |
+| `POST /v1/admin/users` | tenant, org | `{email, name, password, role, organization_id?}`. Org admins can only add `member`s to their own organization. `403 plan_limit`, `409 email_taken`, `422 organization_required` |
+| `PATCH /v1/admin/users/{id}` | tenant, org (members only) | `{name?, role?, organization_id?, is_active?, password?}`. `403 cannot_modify_self` |
+| `GET /v1/admin/bookings` | tenant, org (own org) | **All statuses** including `pending`, `failed`, `needs_attention`. `?status=&organization_id=` |
+| `GET /v1/admin/audit` | tenant | Who did what, newest first |
+| `POST /v1/bookings/{id}/cancel` | member (own), org admin (own org), tenant admin (tenant) | Cancelling someone else's booking is audited |
+
+**Travel policy:** when a member of an organization with a `max_trip_amount` opens a checkout above it, `POST /v1/checkouts` returns `422 policy_violation`. `403 organization_suspended` if the organization is suspended.
+
+### Platform API 🔒 (super admin only)
+
+| Endpoint | What |
+|---|---|
+| `GET /v1/platform/tenants` | All tenants with user counts |
+| `POST /v1/platform/tenants` | `{slug, name, max_users?, max_orgs?, admin_email, admin_name, admin_password (10+)}`: creates the tenant and its first tenant admin. `409 slug_taken`, `422 reserved_slug` |
+| `PATCH /v1/platform/tenants/{id}` | `{name?, status? (active/suspended), max_users?, max_orgs?, providers?, self_signup?, branding?}`. Suspending cuts off every user of the tenant immediately |
+| `GET /v1/platform/stats` | Tenant, user and booking counts; confirmed value per currency |
+| `GET /v1/platform/audit` | Platform-wide audit trail, `?tenant_id=` filter |
+
+Additional error codes: `forbidden` (403, wrong role), `no_tenant` (403, platform staff on traveller features), `tenant_suspended`, `account_disabled`, `plan_limit`, `signup_disabled`, `policy_violation`, `tenant_not_found`.
 
 ## Client checklist for the booking screen
 

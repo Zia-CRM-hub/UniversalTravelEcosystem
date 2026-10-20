@@ -19,6 +19,17 @@ class Settings(BaseSettings):
     offer_ttl_minutes: int = 15
     cors_origins: str = ""  # comma separated; native mobile apps don't need CORS
     rate_limit_per_minute: int = 120
+    # Shared store for rate limits (needed when running more than one API replica). Empty = in-process.
+    redis_url: str | None = None
+
+    # --- SaaS: multi-tenancy ---------------------------------------------------
+    default_tenant_slug: str = "public"  # the self-serve consumer tenant; also used when no tenant is specified
+    superadmin_email: str | None = None  # bootstraps the platform super admin on start-up (if both are set)
+    superadmin_password: SecretStr | None = None
+
+    # --- background worker -------------------------------------------------------
+    worker_interval_s: int = 60
+    stale_pending_minutes: int = 15
 
     # --- supply providers ---------------------------------------------------
     providers: str = "demo"  # comma separated: demo,duffel,amadeus
@@ -99,6 +110,9 @@ class Settings(BaseSettings):
                 errs.append("SECRET_KEY must be set to a unique value of 32+ characters in prod")
             if "demo" in names and not self.allow_demo_in_prod:
                 errs.append("the demo provider produces fake bookings; set ALLOW_DEMO_IN_PROD=true to override")
+        if self.app_env == "prod" and self.superadmin_email and (
+                not self.superadmin_password or len(self.superadmin_password.get_secret_value()) < 12):
+            errs.append("SUPERADMIN_PASSWORD must be 12+ characters in prod")
         if errs:
             raise RuntimeError("Invalid configuration: " + "; ".join(errs))
 

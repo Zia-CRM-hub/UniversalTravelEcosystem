@@ -124,8 +124,8 @@ class LLMClient:
 class _Run:
     """Per-request state: collects cards for clients and numbers options consistently."""
 
-    def __init__(self, db: AsyncSession, providers: dict[str, TravelProvider]):
-        self.db, self.providers, self.cards, self.n = db, providers, [], 0
+    def __init__(self, db: AsyncSession, providers: dict[str, TravelProvider], tenant_id: str):
+        self.db, self.providers, self.tenant_id, self.cards, self.n = db, providers, tenant_id, [], 0
 
     def _card(self, o: dict) -> dict:
         self.n += 1
@@ -151,7 +151,7 @@ class _Run:
             if name == "plan_trip":
                 a = PlanArgs(**args)
                 self._future(a.start)
-                plan = await planner.plan_trip(self.db, self.providers, origin=a.origin, destination=a.destination,
+                plan = await planner.plan_trip(self.db, self.providers, self.tenant_id, origin=a.origin, destination=a.destination,
                                                start=a.start, end=a.end, travelers=a.travelers, mode=a.mode,
                                                budget=a.budget, stars=3)
                 offers = [plan["outbound"], plan["return"], plan["hotel"]]
@@ -175,14 +175,15 @@ class _Run:
         found = res.found[:CARD_LIMIT]
         if not found:
             return {"results": [], "note": "No results. Suggest other dates or places."}
-        offers = await search.persist(self.db, found)
+        offers = await search.persist(self.db, found, self.tenant_id)
         return {"results": [{"option": self._card(o)["n"], "summary": describe(o)} for o in offers]}
 
 
-async def get_session(db: AsyncSession, channel: str, external_id: str) -> AgentSession:
-    s = await db.scalar(select(AgentSession).where(AgentSession.channel == channel, AgentSession.external_id == external_id))
+async def get_session(db: AsyncSession, tenant_id: str, channel: str, external_id: str) -> AgentSession:
+    s = await db.scalar(select(AgentSession).where(AgentSession.tenant_id == tenant_id, AgentSession.channel == channel,
+                                                   AgentSession.external_id == external_id))
     if not s:
-        s = AgentSession(channel=channel, external_id=external_id, messages=[], seen_message_ids=[])
+        s = AgentSession(tenant_id=tenant_id, channel=channel, external_id=external_id, messages=[], seen_message_ids=[])
         db.add(s)
         await db.flush()
     return s
@@ -192,7 +193,7 @@ async def chat(db: AsyncSession, providers: dict[str, TravelProvider], llm: LLMC
                session: AgentSession, text: str) -> tuple[str, list[dict]]:
     if llm is None:
         raise DomainError(503, "agent_unavailable", "The assistant is not configured on this server")
-    run = _Run(db, providers)
+    run = _Run(db, providers, session.tenant_id)
     history = list(session.messages)[-HISTORY_LIMIT:]
     messages = [{"role": "system", "content": SYSTEM.format(today=date.today().isoformat())}, *history,
                 {"role": "user", "content": text}]

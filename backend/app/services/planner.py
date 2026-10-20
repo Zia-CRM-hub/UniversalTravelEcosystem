@@ -14,7 +14,7 @@ _DAY_IDEAS = [
 ]
 
 
-async def plan_trip(db: AsyncSession, providers: dict[str, TravelProvider], *, origin: str, destination: str,
+async def plan_trip(db: AsyncSession, providers: dict[str, TravelProvider], tenant_id: str, *, origin: str, destination: str,
                     start: date, end: date, travelers: int, mode: str, budget: int | None, stars: int) -> dict:
     """Cheapest outbound + return and best-value hotel, all in one currency, within budget."""
     if end <= start:
@@ -46,7 +46,7 @@ async def plan_trip(db: AsyncSession, providers: dict[str, TravelProvider], *, o
     # Scale-free value score: rewards rating (squared), penalises price.
     hotel = max(affordable, key=lambda h: h.offer["rating"] ** 2 / h.offer["price"])
 
-    offers = await search.persist(db, [out, back, hotel])
+    offers = await search.persist(db, [out, back, hotel], tenant_id)
     days = (end - start).days
     return {
         "currency": cur,

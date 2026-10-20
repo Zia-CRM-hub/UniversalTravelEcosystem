@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.config import settings
 from ..core.errors import DomainError
 from ..db import get_db
-from ..models import OfferSnapshot, aware, now
+from ..models import OfferSnapshot, Tenant, aware, now
 from ..schemas import HotelSearchOut, TransportSearchOut
 from ..services import search
-from .deps import get_providers
+from ..tenancy import resolve_tenant
+from .deps import Scope, public_scope
 
 router = APIRouter(tags=["search"])
 
@@ -22,15 +23,15 @@ async def transport(
     destination: str = Query(min_length=2, max_length=64),
     day: date = Query(alias="date"),
     adults: int = Query(1, ge=1, le=9),
-    providers=Depends(get_providers),
+    scope: Scope = Depends(public_scope),
     db: AsyncSession = Depends(get_db),
 ):
     if origin.strip().lower() == destination.strip().lower():
         raise DomainError(422, "same_place", "Origin and destination must differ")
     if day < date.today():
         raise DomainError(422, "past_date", "Date is in the past")
-    res = await search.collect_transport(providers, kind, origin, destination, day, adults)
-    return {"offers": await search.persist(db, res.found), "warnings": res.warnings}
+    res = await search.collect_transport(scope.providers, kind, origin, destination, day, adults)
+    return {"offers": await search.persist(db, res.found, scope.tenant.id), "warnings": res.warnings}
 
 
 @router.get("/search/hotels", response_model=HotelSearchOut)
@@ -40,22 +41,22 @@ async def hotels(
     check_out: date = Query(),
     stars_min: int = Query(1, ge=1, le=5),
     guests: int = Query(1, ge=1, le=9),
-    providers=Depends(get_providers),
+    scope: Scope = Depends(public_scope),
     db: AsyncSession = Depends(get_db),
 ):
     if check_out <= check_in:
         raise DomainError(422, "bad_dates", "check_out must be after check_in")
     if check_in < date.today():
         raise DomainError(422, "past_date", "Date is in the past")
-    res = await search.collect_hotels(providers, city, check_in, check_out, stars_min, guests)
-    return {"offers": await search.persist(db, res.found), "warnings": res.warnings}
+    res = await search.collect_hotels(scope.providers, city, check_in, check_out, stars_min, guests)
+    return {"offers": await search.persist(db, res.found, scope.tenant.id), "warnings": res.warnings}
 
 
 @router.get("/offers/{offer_id}")
-async def get_offer(offer_id: str, db: AsyncSession = Depends(get_db)):
-    """Resolve a hand-off link (from chat / WhatsApp) back to the offer the user was shown."""
+async def get_offer(offer_id: str, tenant: Tenant = Depends(resolve_tenant), db: AsyncSession = Depends(get_db)):
+    """Resolve a hand-off link (from chat / WhatsApp) back to the offer the user was shown. Tenant-scoped."""
     snap = await db.get(OfferSnapshot, offer_id)
-    if not snap:
+    if not snap or snap.tenant_id != tenant.id:
         raise DomainError(404, "offer_not_found", "Offer not found. Please search again.")
     if aware(snap.expires_at) <= now():
         raise DomainError(410, "offer_expired", "This offer has expired. Please search again.")

@@ -21,7 +21,7 @@ pip install -r requirements-dev.txt
 python ../scripts/demo.py
 ```
 
-The script starts the real API on a temporary database, plus two small stand-ins on local ports: a keyword-driven "LLM" speaking the OpenAI tool-calling protocol, and a fake WhatsApp server that records what the bot sends. The stand-in LLM understands only phrases like "cheapest flight Delhi to Goa in 12 days"; a real model (Ollama and others) is far more flexible.
+The script starts the real API (including a super admin and a second tenant for the SaaS step) on a temporary database, plus two small stand-ins on local ports: a keyword-driven "LLM" speaking the OpenAI tool-calling protocol, and a fake WhatsApp server that records what the bot sends. The stand-in LLM understands only phrases like "cheapest flight Delhi to Goa in 12 days"; a real model (Ollama and others) is far more flexible.
 
 ### What happens, step by step (real output, lightly trimmed)
 
@@ -98,9 +98,29 @@ Meta redelivers the same message -> still only 1 reply sent (duplicates ignored)
 
 **9. Operations view.** `bookings_total{outcome="confirmed",provider="demo"} 3.0`. Every response has an `X-Request-ID` and logs are JSON, so a request can be traced end to end.
 
+**10. SaaS: platform, tenant, organization, traveller.** The same script then onboards a business customer:
+```
+SUPER ADMIN created tenant 'acme' (plan: 25 users, 5 orgs) and its first admin
+TENANT ADMIN created organization 'Sales' with a travel policy: max 100 INR per trip
+Created an ORG ADMIN (lead) and a MEMBER (rep) in Sales
+Policy in action: rep tries to book 1,120.00 INR -> HTTP 422: This trip exceeds your organization's limit of 100 INR
+Tenant admin raises the limit -> the same booking now opens a checkout: HTTP 201
+Scoping: the org admin sees 2 users (only Sales); the tenant admin sees 3
+A member opening /admin/users -> HTTP 403 (forbidden)
+Isolation: a user of a DIFFERENT tenant using Acme's offer id -> HTTP 404 (looks like it doesn't exist)
+SUPER ADMIN suspends Acme -> rep's existing session is cut off at once: HTTP 403 tenant_suspended
+Reactivated -> HTTP 200
+Audit trail (what the tenant admin sees):
+  org.create         by admin@acme-corp.com
+  user.create        by admin@acme-corp.com
+  ...
+Platform stats: 2 tenants, 5 users, bookings {'cancelled': 1, 'confirmed': 2}
+```
+**Talking points:** three levels of admin, each seeing only their slice; a spending policy enforced by the server; tenants cannot see each other's data (and cannot even tell it exists); suspension is instant; every admin action is recorded. **Be upfront:** these are API features. There is no admin console UI yet. Details: [SAAS.md](SAAS.md).
+
 ### Optional: poke the API yourself
 
-Run the API (`uvicorn app.main:app`), open <http://localhost:8000/docs> and try the endpoints. Register, authorize with the token, call `/v1/search/transport`, then `/v1/checkouts` and `/v1/checkouts/{id}/confirm`.
+Run the API (`uvicorn app.main:app`; set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD` to try the admin endpoints), open <http://localhost:8000/docs> and try the endpoints. Register, authorize with the token, call `/v1/search/transport`, then `/v1/checkouts` and `/v1/checkouts/{id}/confirm`.
 
 ---
 

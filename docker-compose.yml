@@ -12,14 +12,35 @@ services:
       interval: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]   # rate-limit counters only; safe to lose
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  # The API is stateless: scale it with `docker compose up -d --scale api=3` (Caddy balances across replicas).
   api:
     build: ./backend
     env_file: .env
-    environment:
+    environment: &api_env
       APP_ENV: prod
       DATABASE_URL: postgresql+psycopg://ute:${DB_PASSWORD}@db:5432/ute
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Background housekeeping (offer cleanup, stuck-booking detection). Runs separately from the API replicas.
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.worker"]
+    env_file: .env
+    environment: *api_env
+    depends_on:
+      api: { condition: service_started }
     restart: unless-stopped
 
   # Web app + reverse proxy (automatic HTTPS once a real domain is in web/Caddyfile).

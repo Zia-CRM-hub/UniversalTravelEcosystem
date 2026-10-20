@@ -14,6 +14,7 @@ router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 @router.get("", response_model=list[BookingOut])
 async def mine(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """The caller's own bookings. Admins see wider scopes under /v1/admin/bookings."""
     q = select(Booking).where(Booking.user_id == user.id, Booking.status != "pending").order_by(Booking.created_at.desc())
     return (await db.scalars(q)).all()
 
@@ -26,4 +27,5 @@ async def cancel(
     providers=Depends(get_providers),
     gateway=Depends(get_gateway),
 ):
+    """Members cancel their own; org admins their organization's; tenant admins their tenant's."""
     return await svc.cancel_booking(db, providers, gateway, user, booking_id)

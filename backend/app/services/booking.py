@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.errors import DomainError, PaymentError, PriceChanged, ProviderError, ProviderUnavailable
 from ..models import Booking, Checkout, User
 from ..providers.base import TravelProvider
+from ..tenancy import audit, can_access_booking
 from .payments import PaymentGateway
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ def provider_failure(e: ProviderError) -> DomainError:
 async def cancel_booking(db: AsyncSession, providers: dict[str, TravelProvider], gateway: PaymentGateway,
                          user: User, booking_id: str) -> Booking:
     b = await db.get(Booking, booking_id)
-    if not b or b.user_id != user.id:
+    if not b or not can_access_booking(user, b):  # out-of-scope ids look like missing ones
         raise DomainError(404, "booking_not_found", "Booking not found")
     if b.status != "confirmed":
         raise DomainError(409, "not_cancellable", f"A {b.status} booking cannot be cancelled")
@@ -36,6 +37,8 @@ async def cancel_booking(db: AsyncSession, providers: dict[str, TravelProvider],
     except ProviderError as e:
         raise provider_failure(e) from None
     b.status = "cancelled"
+    if b.user_id != user.id:
+        audit(db, user, "booking.cancel_by_admin", "booking", b.id, b.tenant_id, reference=b.reference, owner=b.user_id)
     checkout = await db.get(Checkout, b.checkout_id)
     if checkout and checkout.payment_state == "captured" and checkout.payment_id:
         try:  # refund only this booking's share of the shared payment

@@ -16,9 +16,10 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.errors import DomainError, PaymentError, ProviderError
+from ..core.money import to_major
 from ..core.observability import BOOKINGS
 from ..core.observability import log as jlog
-from ..models import Booking, Checkout, OfferSnapshot, User, aware, new_id, now
+from ..models import Booking, Checkout, OfferSnapshot, Organization, User, aware, new_id, now
 from ..providers.base import TravelProvider
 from ..schemas import ConfirmIn
 from .booking import provider_failure
@@ -27,11 +28,11 @@ from .payments import PaymentGateway
 logger = logging.getLogger(__name__)
 
 
-async def _snapshots(db: AsyncSession, ids: list[str]) -> list[OfferSnapshot]:
+async def _snapshots(db: AsyncSession, ids: list[str], tenant_id: str) -> list[OfferSnapshot]:
     out = []
     for i in ids:
         snap = await db.get(OfferSnapshot, i)
-        if not snap:
+        if not snap or snap.tenant_id != tenant_id:  # another tenant's offer looks exactly like a missing one
             raise DomainError(404, "offer_not_found", "An offer was not found. Please search again.")
         if aware(snap.expires_at) <= now():
             raise DomainError(410, "offer_expired", "An offer has expired. Please search again.")
@@ -39,17 +40,37 @@ async def _snapshots(db: AsyncSession, ids: list[str]) -> list[OfferSnapshot]:
     return out
 
 
+async def _enforce_policy(db: AsyncSession, user: User, amount: int, currency: str) -> None:
+    """Organization travel policy: one checkout may not exceed the organization's limit."""
+    if not user.organization_id:
+        return
+    org = await db.get(Organization, user.organization_id)
+    if not org:
+        return
+    if org.status != "active":
+        raise DomainError(403, "organization_suspended", "Your organization is suspended")
+    if org.max_trip_amount is None:
+        return
+    if currency != org.policy_currency:
+        raise DomainError(422, "policy_violation", f"Your organization's travel policy only allows {org.policy_currency} bookings")
+    if amount > org.max_trip_amount:
+        limit = f"{to_major(org.max_trip_amount, currency):,.0f} {currency}"
+        raise DomainError(422, "policy_violation", f"This trip exceeds your organization's limit of {limit}")
+
+
 async def create_checkout(db: AsyncSession, providers: dict[str, TravelProvider], gateway: PaymentGateway,
                           user: User, offer_ids: list[str]) -> tuple[Checkout, list[OfferSnapshot]]:
     ids = list(dict.fromkeys(offer_ids))
-    snaps = await _snapshots(db, ids)
+    snaps = await _snapshots(db, ids, user.tenant_id)
     if len({s.currency for s in snaps}) != 1:
         raise DomainError(422, "mixed_currency", "These offers are priced in different currencies")
     if len({s.offer["pax"] for s in snaps}) != 1:
         raise DomainError(422, "mixed_party", "These offers are for different numbers of travellers")
     if any(s.provider not in providers for s in snaps):
         raise DomainError(503, "provider_disabled", "A supplier is not currently available")
-    c = Checkout(id=new_id(), user_id=user.id, offer_ids=ids, amount=sum(s.price for s in snaps),
+    amount = sum(s.price for s in snaps)
+    await _enforce_policy(db, user, amount, snaps[0].currency)
+    c = Checkout(id=new_id(), tenant_id=user.tenant_id, organization_id=user.organization_id, user_id=user.id, offer_ids=ids, amount=sum(s.price for s in snaps),
                  currency=snaps[0].currency, gateway=gateway.name, status="created", payment_state="none")
     try:
         c.gateway_order_id = await gateway.create_order(c.amount, c.currency, c.id)
@@ -106,7 +127,7 @@ async def confirm_checkout(db: AsyncSession, providers: dict[str, TravelProvider
 
     # --- validate before any money is touched ---
     try:
-        snaps = await _snapshots(db, c.offer_ids)
+        snaps = await _snapshots(db, c.offer_ids, c.tenant_id)
     except DomainError as e:
         await fail(e, e.detail)
     if any(len(body.passengers) != s.offer["pax"] for s in snaps):
@@ -127,7 +148,8 @@ async def confirm_checkout(db: AsyncSession, providers: dict[str, TravelProvider
     contact = body.contact.model_dump(mode="json")
     confirmed: list[Booking] = []
     for snap in snaps:
-        b = Booking(reference="UT" + secrets.token_hex(4).upper(), user_id=user.id, checkout_id=c.id, offer_id=snap.id,
+        b = Booking(reference="UT" + secrets.token_hex(4).upper(), tenant_id=c.tenant_id, organization_id=c.organization_id,
+                    user_id=user.id, checkout_id=c.id, offer_id=snap.id,
                     kind=snap.kind, provider=snap.provider, total_price=snap.price, currency=snap.currency,
                     offer=snap.offer, passengers=passengers, contact=contact)
         db.add(b)

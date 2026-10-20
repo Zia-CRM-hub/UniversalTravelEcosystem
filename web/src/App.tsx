@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { getToken, setToken } from "./api";
+import { api, getToken, setToken } from "./api";
 import BookPage from "./pages/Book";
 import ChatPage from "./pages/Chat";
 import LoginPage from "./pages/Login";
@@ -17,6 +17,10 @@ function RequireAuth({ authed, children }: { authed: boolean; children: JSX.Elem
 
 export default function App() {
   const [authed, setAuthed] = useState(!!getToken());
+  const [brand, setBrand] = useState("Universal Travel Ecosystem");
+  useEffect(() => {
+    api.tenantConfig().then((c) => { setBrand(c.branding.display_name); document.title = c.branding.display_name; }).catch(() => {});
+  }, []);
   useEffect(() => {
     const out = () => setAuthed(false);
     window.addEventListener("ute:logout", out);
@@ -27,7 +31,7 @@ export default function App() {
     <>
       <header className="nav">
         <Link to="/" className="brand">
-          Universal Travel Ecosystem
+          {brand}
         </Link>
         <nav>
           <NavLink to="/">Search</NavLink>

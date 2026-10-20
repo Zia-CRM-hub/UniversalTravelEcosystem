@@ -1,6 +1,6 @@
 # Universal Travel Ecosystem
 
-A next-generation global travel ecosystem: plan and book travel and stays from the **web**, a **mobile app**, an **AI concierge**, and **WhatsApp**, all on one open-source backend.
+A next-generation global travel ecosystem: plan and book travel and stays from the **web**, a **mobile app**, an **AI concierge**, and **WhatsApp**, all on one open-source backend. Built as a **multi-tenant SaaS** with super admin, tenant admin and organization admin roles.
 
 ## Vision, and how much of it exists today
 
@@ -34,6 +34,14 @@ What *is* built is the foundation the rest plugs into: a supplier abstraction (a
 
 Backend: Python, FastAPI, async SQLAlchemy, PostgreSQL, Alembic. Places: OpenStreetMap. Deploy: Docker Compose and Caddy (automatic HTTPS). Metrics: Prometheus. CI: GitHub Actions. Payments: Razorpay (manual capture) or a demo gateway.
 
+## SaaS model
+
+```
+PLATFORM (super admin) ─► TENANT (tenant admin) ─► ORGANIZATION (org admin) ─► USERS (members)
+```
+
+Customers (tenants) are isolated from each other; each has its own organizations, users, branding, supplier allow-list and plan limits. Organizations carry a travel policy (spend limit per trip). Admin actions are audited, and suspending a tenant locks everyone out instantly. **Built and tested as an API; there is no admin console UI yet.** Details and the onboarding runbook: [docs/SAAS.md](docs/SAAS.md). Scaling plan and honest limits: [docs/SCALING.md](docs/SCALING.md).
+
 ## See it in 20 seconds
 
 ```bash
@@ -43,13 +51,15 @@ pip install -r requirements-dev.txt
 python ../scripts/demo.py
 ```
 
-This starts the real API plus stand-ins for an LLM and WhatsApp, then walks through search, trip planning, a one-payment multi-booking checkout, cancellation, the chat agent and a signed WhatsApp message. Full narrated walkthrough: [docs/DEMO.md](docs/DEMO.md).
+This starts the real API plus stand-ins for an LLM and WhatsApp, then walks through search, trip planning, a one-payment multi-booking checkout, cancellation, the chat agent, a signed WhatsApp message, and the SaaS model (tenant onboarding, organization travel policy, isolation, suspension, audit). Full narrated walkthrough: [docs/DEMO.md](docs/DEMO.md).
 
 ## What is verified and what is not
 
 | Area | Status |
 |---|---|
-| Backend: search, planner, checkout saga, agent, WhatsApp handling, migrations | **Tested**: 50 passing tests, lint clean, demo script runs end to end |
+| Backend: search, planner, checkout saga, agent, WhatsApp handling, migrations | **Tested**: 72 passing tests, lint clean, demo script runs end to end |
+| SaaS model: super/tenant/org admin, isolation, policy, suspension, audit, worker, Redis rate limiting | **Tested** (22 tests). Redis path tested against a fake Redis only. Admin features are **API-only** (no admin UI) |
+| Scalability | Built to scale out (stateless API, shared rate limits, separate worker). **Never load-tested**; see [docs/SCALING.md](docs/SCALING.md) |
 | Duffel adapter | Search and order shapes checked against Duffel's docs; place suggestions, `type: "instant"` and the two-step cancellation are from memory. Mocked HTTP only. **Never run against Duffel.** |
 | Amadeus adapter | **Unverified.** Amadeus Self-Service was shut down on 2026-07-17; only Enterprise customers can use it. |
 | Razorpay gateway | Flow and signature verification checked against Razorpay's docs; payment-fetch fields and the refund endpoint are from memory. Mocked HTTP only. |
@@ -62,6 +72,8 @@ This starts the real API plus stand-ins for an LLM and WhatsApp, then walks thro
 | Document | What is in it |
 |---|---|
 | [docs/DEMO.md](docs/DEMO.md) | Narrated demo: scripted, apps, and a live-services checklist; what to say about limits |
+| [docs/SAAS.md](docs/SAAS.md) | Platform / tenant / organization model, role matrix, isolation, onboarding runbook, what is not built |
+| [docs/SCALING.md](docs/SCALING.md) | Scaling architecture, where it will hurt first, staged path, enterprise checklist |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, data model, the checkout saga, failure handling, security model, trade-offs |
 | [docs/API.md](docs/API.md) | Conventions, every endpoint, error codes, client checklist (exact spec: [docs/openapi.json](docs/openapi.json)) |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every environment variable and the production start-up checks |
@@ -88,6 +100,7 @@ cp .env.example .env && docker compose up -d --build
 
 ## Suggested path from here
 
+0. **Build the admin console** (platform, tenant and organization screens) on top of the admin API, add SSO, billing and Postgres row-level security.
 1. **Make today's slice real:** run Duffel in its sandbox and Razorpay in test mode ([DEMO.md, part C](docs/DEMO.md#c-live-services-demo-checklist)), build and fix the web and mobile apps, then add the reconciliation job.
 2. **Add real inventory** for hotels, then trains and buses, by implementing the supplier interface.
 3. **Broaden categories** one at a time (homestays and retreats, experiences and events, local mobility), each as new supplier kinds plus search and checkout support.

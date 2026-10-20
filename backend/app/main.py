@@ -1,7 +1,6 @@
 import logging
 import time
 import uuid
-from collections import defaultdict
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -10,15 +9,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from .api import agent, auth, bookings, checkouts, health, search, trips, whatsapp
+from .api import admin, agent, auth, bookings, checkouts, health, platform, search, tenant, trips, whatsapp
 from .core.config import settings
 from .core.errors import DomainError
 from .core.observability import HTTP_LATENCY, HTTP_REQUESTS, configure_logging, request_id_var
-from .db import Base, engine
+from .core.ratelimit import build_limiter
+from .db import Base, SessionLocal, engine
 from .providers.registry import build_providers
 from .services.agent import LLMClient
 from .services.payments import build_gateway
 from .services.whatsapp import WhatsAppClient
+from .tenancy import ensure_platform, tenant_slug
 
 log = logging.getLogger("ute")
 _EXEMPT = ("/health", "/metrics")
@@ -31,16 +32,19 @@ async def lifespan(app: FastAPI):
     if settings.create_tables:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+    async with SessionLocal() as db:
+        await ensure_platform(db)  # default tenant + optional super admin; idempotent
+    app.state.limiter = build_limiter(settings.redis_url)
     app.state.providers = build_providers(settings)
     app.state.gateway = build_gateway(settings)
     app.state.llm = LLMClient.from_settings()
-    app.state.whatsapp = WhatsAppClient(settings) if settings.whatsapp_enabled else None
+    app.state.whatsapp = WhatsAppClient(settings, limiter=app.state.limiter) if settings.whatsapp_enabled else None
     log.info("started env=%s providers=%s gateway=%s agent=%s whatsapp=%s", settings.app_env, list(app.state.providers),
              app.state.gateway.name, app.state.llm is not None, app.state.whatsapp is not None)
     yield
     for p in app.state.providers.values():
         await p.aclose()
-    for c in (app.state.gateway, app.state.llm, app.state.whatsapp):
+    for c in (app.state.gateway, app.state.llm, app.state.whatsapp, app.state.limiter):
         if c:
             await c.aclose()
     await engine.dispose()
@@ -53,25 +57,16 @@ def create_app() -> FastAPI:
         app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in settings.cors_origins.split(",")],
                            allow_methods=["*"], allow_headers=["*"])
 
-    windows: dict[str, tuple[int, int]] = defaultdict(lambda: (0, 0))
-
     @app.middleware("http")
     async def rate_limit(request: Request, call_next):
-        """Fixed-window per client IP. In-process: use a shared store (Redis) behind multiple replicas."""
+        """Fixed window per (tenant, client IP). Shared across replicas when REDIS_URL is set."""
         if request.url.path.startswith(_EXEMPT) or settings.rate_limit_per_minute <= 0:
             return await call_next(request)
         ip = request.client.host if request.client else "?"
-        minute = int(time.time() // 60)
-        w, count = windows[ip]
-        if w != minute:
-            if len(windows) > 10_000:
-                windows.clear()
-            count = 0
-        count += 1
-        windows[ip] = (minute, count)
-        if count > settings.rate_limit_per_minute:
+        ok, retry = await request.app.state.limiter.hit(f"{tenant_slug(request)}:{ip}", settings.rate_limit_per_minute)
+        if not ok:
             return JSONResponse({"detail": "Too many requests", "code": "rate_limited"}, status_code=429,
-                                headers={"Retry-After": str(60 - int(time.time() % 60))})
+                                headers={"Retry-After": str(retry)})
         return await call_next(request)
 
     @app.middleware("http")
@@ -108,7 +103,7 @@ def create_app() -> FastAPI:
         return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     app.include_router(health.router)
-    for r in (auth, search, checkouts, bookings, trips, agent, whatsapp):
+    for r in (auth, tenant, search, checkouts, bookings, trips, agent, whatsapp, admin, platform):
         app.include_router(r.router, prefix="/v1")
     return app
 

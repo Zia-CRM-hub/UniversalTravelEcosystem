@@ -33,13 +33,20 @@ Universal Travel Ecosystem lets a person search and book flights, trains, buses 
 
 | Table | Purpose | Key facts |
 |---|---|---|
-| `users` | Accounts | scrypt password hash. |
+| `tenants` | A customer of the platform | `slug`, `status` (active/suspended), plan limits, `settings` (supplier allow-list, branding, sign-up policy). |
+| `organizations` | A department or client inside a tenant | Travel policy (`max_trip_amount`, `policy_currency`). |
+| `users` | Accounts | scrypt password hash, `role` (super_admin, tenant_admin, org_admin, member), `tenant_id`, `organization_id`, `is_active`. Email is unique **per tenant**. |
+| `audit_events` | Append-only record of admin actions | Written in the same transaction as the change; never contains secrets. |
 | `offer_snapshots` | What the user was shown | normalized `offer` (sent to clients), private `raw` supplier payload (never leaves the server), `price`, `expires_at`. |
 | `checkouts` | One payment covering one or more bookings | `status`: created, processing, booked, failed. `payment_state`: none, authorized, captured, released, void_failed, capture_failed. |
 | `bookings` | One supplier order each | `status`: pending, confirmed, failed, cancelled, needs_attention. Written as `pending` **before** the supplier call. |
 | `agent_sessions` | Chat history per channel | Visible dialogue only (no tool traffic), plus seen WhatsApp message ids for de-duplication. |
 
 Money is stored as **integer minor units** (paise, cents) with the currency alongside. Exponents follow ISO 4217 (JPY has 0, KWD has 3). Prices are always the **total for the whole party** that was searched.
+
+### 3.1 Multi-tenancy
+
+The product is a SaaS: platform (super admin) → tenant → organization → user. Every business table (offers, checkouts, bookings, chat sessions, audit events) carries a `tenant_id`, and every query is filtered by the caller's tenant (and organization for org admins). Tenant and user are re-checked on **every request**, so suspending a tenant or disabling a user takes effect immediately. Each tenant has its own supplier allow-list, branding and plan limits, and each organization its own travel policy. Full model, role matrix and onboarding runbook: [SAAS.md](SAAS.md). How it scales: [SCALING.md](SCALING.md).
 
 ## 4. The core flows
 
@@ -109,10 +116,11 @@ WhatsApp adds: HMAC signature verification of Meta's webhook, an immediate `200`
 - Payment verification: HMAC signature, the order id stored on **our** server (not the client's), exact amount and currency, and gateway-reported status. A payment cannot be replayed against a different checkout.
 - The supplier payload (`raw`) and secrets never reach clients. Settings use `SecretStr`.
 - The server **refuses to start** in production with a weak or default `SECRET_KEY`, missing supplier or gateway credentials, or the fake demo supplier or gateway (unless explicitly allowed).
-- Bookings, checkouts and chat sessions are scoped to the logged-in user (404, not 403, for other users' ids).
+- Bookings, checkouts and chat sessions are scoped by role (members: own; org admins: their organization; tenant admins: their tenant), and out-of-scope ids return 404, not 403.
+- Tenant isolation: offers belong to a tenant, so one tenant can never check out or view another's offer ids. Verified by tests, not yet by database row-level security.
 - Passenger date of birth is stored but never echoed back by the API.
 
-Not yet done (see [OPERATIONS.md](OPERATIONS.md) known gaps): field-level encryption of passenger data, email verification and password reset, refresh tokens, shared-store rate limiting.
+Not yet done (see [OPERATIONS.md](OPERATIONS.md) known gaps): field-level encryption of passenger data, email verification and password reset, refresh tokens, SSO/MFA, row-level security.
 
 ## 7. Key decisions and trade-offs
 
@@ -123,7 +131,8 @@ Not yet done (see [OPERATIONS.md](OPERATIONS.md) known gaps): field-level encryp
 | Price = total for the party | Matches how suppliers price; avoids per-person rounding | Search must include party size |
 | One payment per checkout, capture last | Real trips span suppliers; customers should never pay for a half-booked trip | More states to reason about (hence the saga) |
 | Agent is read-only | Keeps payment and personal data out of chat; limits injection impact | Customer finishes in the app or web |
-| In-process rate limiting | Zero dependencies | Per process: use Redis before running several replicas |
+| Rate limiting in-process by default, Redis when `REDIS_URL` is set | Zero dependencies for one replica; shared limits for many | Redis path only tested against a fake Redis |
+| Pooled multi-tenancy (shared tables + `tenant_id`) | Cheapest to run, easy to onboard tenants | Isolation relies on every query being scoped; add RLS; large tenants may need dedicated databases later |
 | Async everywhere | Concurrent supplier calls | Slightly more complex tests |
 
 ## 8. Extension points

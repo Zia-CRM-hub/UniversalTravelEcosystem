@@ -73,12 +73,12 @@ def _expiry(offer: dict) -> datetime:
     return now() + timedelta(minutes=settings.offer_ttl_minutes)
 
 
-async def persist(db: AsyncSession, found: list[Found]) -> list[dict]:
+async def persist(db: AsyncSession, found: list[Found], tenant_id: str) -> list[dict]:
     """Snapshot offers server-side and hand clients an opaque offer_id."""
     out = []
     for f in found:
         exp = _expiry(f.offer)
-        snap = OfferSnapshot(id=new_id(), provider=f.offer["provider"], kind=f.offer["kind"], price=f.offer["price"],
+        snap = OfferSnapshot(id=new_id(), tenant_id=tenant_id, provider=f.offer["provider"], kind=f.offer["kind"], price=f.offer["price"],
                              currency=f.offer["currency"], offer={**f.offer, "expires_at": exp.isoformat()},
                              raw=f.raw, expires_at=exp)
         db.add(snap)

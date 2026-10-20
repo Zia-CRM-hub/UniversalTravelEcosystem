@@ -15,7 +15,19 @@ The server **validates configuration at startup and refuses to start** if someth
 | `TOKEN_MINUTES` | `10080` (7 days) | Login token lifetime. |
 | `OFFER_TTL_MINUTES` | `15` | How long a search result can be booked (suppliers that report their own expiry override this). |
 | `CORS_ORIGINS` | empty | Comma-separated origins. Empty disables CORS. The provided setup serves web and API from one origin, and native apps ignore CORS. |
-| `RATE_LIMIT_PER_MINUTE` | `120` | Per client IP, per process. `0` disables. |
+| `RATE_LIMIT_PER_MINUTE` | `120` | Per (tenant, client IP). `0` disables. |
+| `REDIS_URL` | empty | e.g. `redis://redis:6379/0`. Shares rate-limit counters (and the WhatsApp throttle) across API replicas; **required before running more than one replica**. Empty = in-process counters. If Redis is down the limiter allows requests. |
+
+## SaaS and background worker
+
+| Variable | Default | Notes |
+|---|---|---|
+| `DEFAULT_TENANT_SLUG` | `public` | The self-service consumer tenant, created at start-up if missing. Used when a request has no `X-Tenant-Slug`; also the tenant that WhatsApp chats belong to. |
+| `SUPERADMIN_EMAIL` / `SUPERADMIN_PASSWORD` | none | If both are set, the platform super admin is created on start-up (idempotent). **Prod requires a password of 12+ characters.** Log in with header `X-Tenant-Slug: platform`. |
+| `WORKER_INTERVAL_S` | `60` | Seconds between worker cycles (`python -m app.worker`). |
+| `STALE_PENDING_MINUTES` | `15` | A booking left `pending` (or a checkout left `processing`) longer than this is flagged `needs_attention` / failed by the worker, with a CRITICAL log. |
+
+Tenant-level settings (branding, supplier allow-list, sign-up policy, plan limits) live in the database and are managed through the admin API, not environment variables. See [SAAS.md](SAAS.md).
 
 ## Suppliers
 
@@ -72,4 +84,4 @@ The server **validates configuration at startup and refuses to start** if someth
 
 ## Production start-up checks (what the server rejects)
 
-Unknown provider names; `duffel` without `DUFFEL_TOKEN`; `amadeus` without id, secret and base URL; `razorpay` without keys; in `prod`: a missing, default or short `SECRET_KEY`, the demo supplier or the demo gateway without `ALLOW_DEMO_IN_PROD=true`.
+A `SUPERADMIN_EMAIL` without a 12+ character `SUPERADMIN_PASSWORD` in `prod`; unknown provider names; `duffel` without `DUFFEL_TOKEN`; `amadeus` without id, secret and base URL; `razorpay` without keys; in `prod`: a missing, default or short `SECRET_KEY`, the demo supplier or the demo gateway without `ALLOW_DEMO_IN_PROD=true`.

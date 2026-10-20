@@ -1,5 +1,7 @@
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "";
 const TOKEN_KEY = "ute_token";
+// White-label: which tenant this deployment belongs to (empty = the default consumer tenant).
+const TENANT = (import.meta.env.VITE_TENANT as string | undefined) ?? "";
 
 export type Mode = "flight" | "train" | "bus";
 
@@ -98,7 +100,12 @@ async function call<T>(path: string, init: RequestInit & { headers?: Record<stri
   const token = getToken();
   const res = await fetch(BASE + path, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers },
+    headers: {
+      "Content-Type": "application/json",
+      ...(TENANT ? { "X-Tenant-Slug": TENANT } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init.headers,
+    },
   });
   if (res.status === 204) return undefined as T;
   const body = await res.json().catch(() => ({}));
@@ -116,7 +123,15 @@ const qs = (o: Record<string, string | number>) =>
   Object.entries(o).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join("&");
 const json = (body: unknown) => ({ method: "POST", body: JSON.stringify(body) });
 
+export interface TenantConfig {
+  slug: string;
+  name: string;
+  self_signup: boolean;
+  branding: { display_name: string; primary_color: string | null; logo_url: string | null };
+}
+
 export const api = {
+  tenantConfig: () => call<TenantConfig>("/v1/tenant/config"),
   async register(email: string, name: string, password: string) {
     setToken((await call<{ access_token: string }>("/v1/auth/register", json({ email, name, password }))).access_token);
   },

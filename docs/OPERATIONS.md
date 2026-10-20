@@ -14,7 +14,8 @@ docker compose logs -f api          # JSON logs; look for "started env=prod prov
 - Put your domain in [web/Caddyfile](../web/Caddyfile) (replace `:80`) for automatic HTTPS. The Caddyfile proxies `/v1/*` and `/health/*` to the API and blocks `/metrics`.
 - If the API exits immediately, read its first log lines: configuration errors are listed there, all at once.
 - Optional open-source model for the agent: `docker compose --profile llm up -d && docker compose exec ollama ollama pull llama3.1`, then set `LLM_BASE_URL=http://ollama:11434/v1` in `.env` and `docker compose up -d api`.
-- **Run one API replica** until rate limiting and the WhatsApp throttle move to a shared store (see known gaps).
+- **Scaling out:** Redis is included in Compose (`REDIS_URL`), so several API replicas share rate limits. The API is stateless; the **worker** runs as its own container (included). Read [SCALING.md](SCALING.md) first: the bundled Caddy has not been verified to balance across replicas, so use a real load balancer for multi-replica deployments.
+- **First start:** set `SUPERADMIN_EMAIL` and `SUPERADMIN_PASSWORD` to create the platform super admin, then onboard customers as described in [SAAS.md](SAAS.md#onboarding-a-new-customer-runbook).
 - Mobile releases: `npx eas build`, with `extra.apiUrl` set to your HTTPS domain. Card payments need the development or release build, not Expo Go.
 
 > Docker and Compose files have not been run in the authoring environment. Expect to fix small things on the first `docker compose up`.
@@ -77,6 +78,7 @@ Notes: replies are only sent in response to inbound messages (inside Meta's 24-h
 | `VOID FAILED for checkout …` | A failed checkout's payment could not be released. | It will auto-release at the timeout; if the account auto-captured, refund it manually. |
 | `COMPENSATION FAILED: supplier order … must be cancelled manually` | One booking in a failed trip could not be cancelled at the supplier (`status=needs_attention`). | Cancel that order in the supplier's dashboard, then set the booking to `cancelled`. |
 | `REFUND FAILED for cancelled booking …` | Supplier cancelled but the refund failed; the booking shows "refund pending manual review". | Refund that amount in the gateway dashboard. |
+| `STALE PENDING booking …` / `STALE checkout …` | The worker found a booking or checkout abandoned mid-flight (process crash). The booking is now `needs_attention`. | Check the supplier for an order with that reference; cancel or confirm by hand, and reconcile the payment in the gateway. |
 
 Also look for bookings stuck in `pending` for more than a few minutes (the process died mid-booking): check the supplier for an order carrying the booking's reference (`metadata.ute_ref` on Duffel) and settle by hand. An automated reconciliation job is the first thing to build next.
 
@@ -93,8 +95,8 @@ Also look for bookings stuck in `pending` for more than a few minutes (the proce
 
 ## 7. Known gaps (be honest about these before launch)
 
-1. **No reconciliation job** for `pending` bookings and payment states.
-2. **Rate limiting and the WhatsApp throttle are per process**; move to Redis before scaling out.
+1. **Reconciliation is detect-only.** The worker flags bookings stuck in `pending` as `needs_attention` and fails stuck checkouts (with CRITICAL logs), but a person still has to check the supplier and gateway. Nothing resolves them automatically.
+2. **Rate limiting is shared only if `REDIS_URL` is set** (it is in the shipped Compose file). The Redis path is tested against a fake Redis, not a real one.
 3. **Passenger data is plain JSON in the database.**
 4. **Auth is basic** (no verification, reset or refresh tokens); the web app stores its token in `localStorage`.
 5. **Hotels, trains and buses** have only the demo supplier; flights are only real through Duffel (or Amadeus Enterprise). Indian rail (IRCTC) needs their authorisation.

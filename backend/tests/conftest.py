@@ -11,6 +11,8 @@ os.environ["PROVIDERS"] = "demo"
 os.environ["APP_ENV"] = "dev"
 os.environ["RATE_LIMIT_PER_MINUTE"] = "0"
 os.environ["WHATSAPP_VERIFY_TOKEN"] = ""
+os.environ["SUPERADMIN_EMAIL"] = "root@platform.com"
+os.environ["SUPERADMIN_PASSWORD"] = "superadmin-pass-123"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

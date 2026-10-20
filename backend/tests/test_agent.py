@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import json
@@ -133,7 +134,12 @@ def test_whatsapp_non_text_and_throttle(client, monkeypatch):
     post(client, payload(typ="image", msg_id="wamid.img"))
     assert "only read text" in sent[0]["text"]["body"]
     wa = client.app.state.whatsapp
-    assert all(wa.allow("x") for _ in range(10)) and not wa.allow("x")
+
+    async def burst():
+        return [await wa.allow("x") for _ in range(11)]
+
+    results = asyncio.run(burst())
+    assert results[:10] == [True] * 10 and results[10] is False
 
 
 def test_signature_helpers():

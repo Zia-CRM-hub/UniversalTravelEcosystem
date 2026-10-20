@@ -11,14 +11,16 @@ Notes
 import hashlib
 import hmac
 import logging
-import time
-from collections import defaultdict, deque
 
 import httpx
+from sqlalchemy import select
 
-from ..core.config import Settings
+from ..core.config import Settings, settings
 from ..core.errors import DomainError
+from ..core.ratelimit import Limiter, MemoryLimiter
 from ..db import SessionLocal
+from ..models import Tenant
+from ..tenancy import providers_for
 from . import agent
 
 log = logging.getLogger(__name__)
@@ -46,22 +48,17 @@ def extract_messages(payload: dict) -> list[dict]:
 
 
 class WhatsAppClient:
-    def __init__(self, s: Settings, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(self, s: Settings, transport: httpx.AsyncBaseTransport | None = None, limiter: Limiter | None = None):
         self.phone_id = s.whatsapp_phone_number_id
         self.http = httpx.AsyncClient(
             base_url=s.whatsapp_graph_url, timeout=15, transport=transport,
             headers={"Authorization": f"Bearer {s.whatsapp_access_token.get_secret_value()}"})
-        self._hits: dict[str, deque] = defaultdict(deque)
+        self.limiter = limiter or MemoryLimiter()
 
-    def allow(self, wa_id: str) -> bool:
-        """Cap per-sender message rate so one number cannot run up LLM cost."""
-        q, t = self._hits[wa_id], time.monotonic()
-        while q and t - q[0] > 60:
-            q.popleft()
-        if len(q) >= PER_USER_PER_MIN:
-            return False
-        q.append(t)
-        return True
+    async def allow(self, wa_id: str) -> bool:
+        """Cap per-sender message rate so one number cannot run up LLM cost (shared store when REDIS_URL is set)."""
+        ok, _ = await self.limiter.hit(f"wa:{wa_id}", PER_USER_PER_MIN, 60)
+        return ok
 
     async def send_text(self, to: str, body: str) -> None:
         r = await self.http.post(f"/{self.phone_id}/messages", json={
@@ -78,7 +75,12 @@ async def handle_incoming(wa: WhatsAppClient, providers, llm, msg: dict) -> None
     to = msg["from"]
     try:
         async with SessionLocal() as db:
-            session = await agent.get_session(db, "whatsapp", to)
+            # The WhatsApp number belongs to the default tenant (one number per platform for now; see docs/SAAS.md).
+            tenant = await db.scalar(select(Tenant).where(Tenant.slug == settings.default_tenant_slug))
+            if not tenant or tenant.status != "active":
+                return
+            providers = providers_for(providers, tenant)
+            session = await agent.get_session(db, tenant.id, "whatsapp", to)
             if msg["id"] in session.seen_message_ids:
                 return  # Meta redelivers; never answer twice
             session.seen_message_ids = [*session.seen_message_ids, msg["id"]][-SEEN_LIMIT:]
@@ -86,7 +88,7 @@ async def handle_incoming(wa: WhatsAppClient, providers, llm, msg: dict) -> None
             if msg["type"] != "text" or not msg["text"].strip():
                 await wa.send_text(to, "I can only read text messages for now. Tell me where and when you want to travel.")
                 return
-            if not wa.allow(to):
+            if not await wa.allow(to):
                 await wa.send_text(to, "You're sending messages quickly. Please wait a minute and try again.")
                 return
             try:
